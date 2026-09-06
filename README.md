@@ -15,6 +15,9 @@ Products preserve membership, and products and challenge-word enumerations
 are duplicate-free when their input enumerations are duplicate-free.
 Finite products now package this evidence together with decidable pair equality
 and a checked product cardinality.
+Fixed-length vectors now form finite carriers with decidable equality and
+cardinality `|F|^n`. Their list conversion preserves length and is injective;
+every list converts to a vector at its own length and back unchanged.
 
 ## Check
 
@@ -87,6 +90,20 @@ compiler rebuild is required when a built checker exists.
   unique enumeration and decidable equality, including empty factors.
 - `scProductCardinality` and `scProductCountBound`: the packaged product has
   cardinality `|A| * |B|`, which bounds every decidable predicate count.
+- `ScVector A n` represents exactly `n` entries as iterated pairs ending in
+  `ScUnit`. `scVectorFinite` packages its complete, unique enumeration and
+  decidable equality using finite products. No equality proof fields or
+  proof-irrelevance principle are needed.
+- `scVectorCardinality` and `scVectorCountBound`: the vector carrier has
+  cardinality `|A|^n`, which bounds every decidable predicate count. Zero
+  rounds give one vector even over an empty carrier; positive rounds over
+  an empty carrier give none.
+- `scVectorList`, `scVectorLength`, and `scVectorListInjective`: vectors
+  convert to length-`n` lists, and equal converted lists imply equal vectors.
+  `scListVector` converts each list to a vector indexed by its length;
+  `scListVectorRoundTrip` proves converting it back yields the original list.
+- `scVectorWordMember`: each converted vector belongs to the existing
+  `scWords` enumeration at the vector's specified round count.
 
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
@@ -121,15 +138,25 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all thirty-one checks passed with checker SHA-256
+On 2026-09-06, all thirty-six checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The thirty-one checks:
+The thirty-six checks:
 
 - All generic proofs check without a prelude or axioms.
+- Finite vectors check cardinality, membership, uniqueness, exact list
+  conversions, round trips, injectivity, length, word membership, and
+  all/none/singleton counts with a count bound. Empty carriers at zero and
+  two rounds and all sixteen equality decisions on two-bit vectors check.
+  Injectivity, the round trip, and word membership also check at abstract
+  arguments.
+- A vector missing a coordinate is rejected.
+- A vector cardinality theorem used with an incorrect size is rejected.
+- Vector word-membership evidence used at the wrong round count is rejected.
+- Vector injectivity supplied with forged list equality is rejected.
 - Finite product packaging checks membership, uniqueness, cardinality, empty
   factors, all/none/singleton predicate counts, and a product count bound.
   All sixteen equality decisions on pairs of bits compute the expected tally.
@@ -181,14 +208,21 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check fifteen deliberate mutations in memory. All fifteen were caught:
+suite and check twenty-six deliberate mutations in memory. All twenty-six were caught:
 incorrect multiplication and power base cases, dropped append entries,
 missing zero-round words, omitted challenges, doubled challenges, and dropped
 head or tail obligations in pointwise evidence, dropped head or tail
 uniqueness obligations, weakened map injectivity, and weakened block
 separation, pair decisions ignoring either coordinate, and pair congruence
-with a weakened second-coordinate equality. All are caught by generic
-proofs. Omitting or doubling challenges preserves enumeration cardinality,
+with a weakened second-coordinate equality. The added controls change the
+zero-round vector carrier, drop a vector coordinate, drop or reverse converted
+list entries, weaken the injectivity premise, remove reducibility from
+the vector package, product package, or pair decision procedure, and
+trivialize the round trip, injectivity, and word-membership statements. All
+are caught by generic proofs except the opaque pair decision, which fails the
+concrete vector counting checks, and the three trivialized statements, which
+pass every concrete instance and fail only the abstract-argument vector
+checks. Omitting or doubling challenges preserves enumeration cardinality,
 but now fails the word-length proof; exact word-content regressions also remain.
 
 Naturals in the concrete regression example test the algebraic equations;
@@ -198,17 +232,17 @@ are permitted by `ScFinite`; a uniform probability interpretation will need
 nonemptiness. Product and word size formulas count list entries with
 multiplicity for arbitrary input lists. For duplicate-free inputs, the
 uniqueness theorems now justify interpreting the entries as distinct outcomes.
-Packaging fixed-length words as a finite carrier and proving enumeration
-independence of counts remain future work. All lists
-over a nonempty carrier are not a finite carrier; the word package must
-restrict the carrier to the specified length.
+Fixed-length words are packaged through `ScVector`, rather than the type
+of all lists. Enumeration independence of counts and equality between
+vector predicate counts and the corresponding list-word counts remain
+future work.
 The word count bound
 is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 ## Next milestones
 
-1. Package fixed-length words; establish enumeration
-   independence and the remaining arithmetic needed for soundness.
+1. Establish enumeration independence, connect vector counts to list-word
+   counts, and prove the remaining arithmetic needed for soundness.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -224,7 +258,7 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
-`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`.
+`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`.
 
 ## License
 

@@ -11,7 +11,7 @@ TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
-                  "FiniteProducts.tot"))
+                  "FiniteProducts.tot", "FiniteVectors.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -75,8 +75,104 @@ def pairDecision{i}{j} : Eq Nat
 # A case is (name, source appended to BASE, expected diagnostic).
 # None: the checker must accept. A string: the checker must exit with
 # status 1 and print that string in its diagnostic.
+VECTOR_EXAMPLE = PRODUCT_EXAMPLE + """
+reducible def vectorHL : ScVector ScBit twoN :=
+  pair ScBit (ScVector ScBit oneN) scHigh (pair ScBit ScUnit scLow scUnit)
+reducible def vectorWord : List ScBit := cons ScBit scHigh (cons ScBit scLow (nil ScBit))
+reducible def bitVectors : ScFinite (ScVector ScBit twoN) := scVectorFinite ScBit scBitFinite twoN
+"""
+VECTOR_CHECKS = VECTOR_EXAMPLE + """
+def vectorCardinality : Eq Nat (scCardinality (ScVector ScBit twoN) bitVectors) fourN :=
+  scVectorCardinality ScBit scBitFinite twoN
+def vectorMember : scMember (ScVector ScBit twoN) vectorHL
+    (scElements (ScVector ScBit twoN) bitVectors) :=
+  scEnumerates (ScVector ScBit twoN) bitVectors vectorHL
+def vectorUnique : scNoDup (ScVector ScBit twoN) (scElements (ScVector ScBit twoN) bitVectors) :=
+  scEnumerationUnique (ScVector ScBit twoN) bitVectors
+def vectorToList : Eq (List ScBit) (scVectorList ScBit twoN vectorHL) vectorWord :=
+  refl (List ScBit) vectorWord
+def listToVector : Eq (ScVector ScBit twoN) (scListVector ScBit vectorWord) vectorHL :=
+  refl (ScVector ScBit twoN) vectorHL
+def listRoundTrip : Eq (List ScBit)
+    (scVectorList ScBit twoN (scListVector ScBit vectorWord)) vectorWord :=
+  scListVectorRoundTrip ScBit vectorWord
+def vectorLength : Eq Nat (scLength ScBit (scVectorList ScBit twoN vectorHL)) twoN :=
+  scVectorLength ScBit twoN vectorHL
+def vectorInWords : scMember (List ScBit) vectorWord (scWords ScBit scBits twoN) :=
+  scVectorWordMember ScBit scBitFinite twoN vectorHL
+def vectorInjective : Eq (ScVector ScBit twoN) vectorHL (scListVector ScBit vectorWord) :=
+  scVectorListInjective ScBit twoN vectorHL (scListVector ScBit vectorWord)
+    (refl (List ScBit) vectorWord)
+def emptyZeroCardinality : Eq Nat (scCardinality (ScVector ScEmpty zero)
+    (scVectorFinite ScEmpty emptyProductFactor zero)) oneN :=
+  scVectorCardinality ScEmpty emptyProductFactor zero
+def emptyTwoCardinality : Eq Nat (scCardinality (ScVector ScEmpty twoN)
+    (scVectorFinite ScEmpty emptyProductFactor twoN)) zero :=
+  scVectorCardinality ScEmpty emptyProductFactor twoN
+def emptyVectorMember : scMember ScUnit scUnit
+    (scElements ScUnit (scVectorFinite ScEmpty emptyProductFactor zero)) :=
+  scEnumerates ScUnit (scVectorFinite ScEmpty emptyProductFactor zero) scUnit
+def emptyVectorWord : scMember (List ScEmpty) (nil ScEmpty) (scWords ScEmpty (nil ScEmpty) zero) :=
+  scVectorWordMember ScEmpty emptyProductFactor zero scUnit
+def emptyRoundTrip : Eq (List ScEmpty)
+    (scVectorList ScEmpty zero (scListVector ScEmpty (nil ScEmpty))) (nil ScEmpty) :=
+  scListVectorRoundTrip ScEmpty (nil ScEmpty)
+def vectorAllCount : Eq Nat (scFiniteCount (ScVector ScBit twoN)
+    (fun v => ScUnit) (fun v => scYes ScUnit scUnit) bitVectors) fourN := refl Nat fourN
+def vectorNoneCount : Eq Nat (scFiniteCount (ScVector ScBit twoN)
+    (fun v => ScEmpty) (fun v => scNo ScEmpty (fun h => h)) bitVectors) zero := refl Nat zero
+def vectorSingletonCount : Eq Nat (scFiniteCount (ScVector ScBit twoN)
+    (fun v => Eq (ScVector ScBit twoN) v vectorHL)
+    (fun v => scDecEq (ScVector ScBit twoN) bitVectors v vectorHL) bitVectors) oneN := refl Nat oneN
+def vectorBound : ScLe (scFiniteCount (ScVector ScBit twoN)
+    (fun v => Eq (ScVector ScBit twoN) v vectorHL)
+    (fun v => scDecEq (ScVector ScBit twoN) bitVectors v vectorHL) bitVectors) fourN :=
+  scVectorCountBound ScBit scBitFinite twoN (fun v => Eq (ScVector ScBit twoN) v vectorHL)
+    (fun v => scDecEq (ScVector ScBit twoN) bitVectors v vectorHL)
+-- Abstract arguments pin statements that concrete instances normalize away.
+def vectorInjectiveAt : (v : ScVector ScBit twoN) -> (w : ScVector ScBit twoN) ->
+    Eq (List ScBit) (scVectorList ScBit twoN v) (scVectorList ScBit twoN w) ->
+    Eq (ScVector ScBit twoN) v w :=
+  fun v w equal => scVectorListInjective ScBit twoN v w equal
+def roundTripAt : (xs : List ScBit) ->
+    Eq (List ScBit) (scVectorList ScBit (scLength ScBit xs) (scListVector ScBit xs)) xs :=
+  fun xs => scListVectorRoundTrip ScBit xs
+def vectorWordAt : (n : Nat) -> (v : ScVector ScBit n) ->
+    scMember (List ScBit) (scVectorList ScBit n v) (scWords ScBit scBits n) :=
+  fun n v => scVectorWordMember ScBit scBitFinite n v
+"""
+BIT_VECTORS = tuple(
+    f"(pair ScBit (ScVector ScBit oneN) {x} (pair ScBit ScUnit {y} scUnit))"
+    for x in ("scLow", "scHigh") for y in ("scLow", "scHigh")
+)
+VECTOR_CHECKS += "\n".join(
+    f"def vectorDecision{i}_{j} : Eq Nat (scTally (Eq (ScVector ScBit twoN) {v} {w}) "
+    f"(scDecEq (ScVector ScBit twoN) bitVectors {v} {w}) zero) "
+    f"{'oneN' if i == j else 'zero'} := refl Nat {'oneN' if i == j else 'zero'}"
+    for i, v in enumerate(BIT_VECTORS) for j, w in enumerate(BIT_VECTORS)
+)
+
 CASES = [
     ("generic-proofs", "", None),
+    ("finite-vectors", VECTOR_CHECKS, None),
+    ("vector-missing-coordinate", VECTOR_EXAMPLE + """
+def missingCoordinate : ScVector ScBit twoN := pair ScBit ScUnit scHigh scUnit
+""", "mismatch"),
+    ("vector-wrong-cardinality", VECTOR_EXAMPLE + """
+def wrongVectorSize : Eq Nat (scCardinality (ScVector ScBit twoN) bitVectors) twoN :=
+  scVectorCardinality ScBit scBitFinite twoN
+""", "mismatch"),
+    ("vector-wrong-round-count", VECTOR_EXAMPLE + """
+def wrongVectorRound : scMember (List ScBit) vectorWord (scWords ScBit scBits oneN) :=
+  scVectorWordMember ScBit scBitFinite twoN vectorHL
+""", "mismatch"),
+    ("vector-injectivity-forged-input", VECTOR_EXAMPLE + """
+def forgedVectorEquality : Eq (ScVector ScBit twoN) vectorHL
+    (pair ScBit (ScVector ScBit oneN) scHigh (pair ScBit ScUnit scHigh scUnit)) :=
+  scVectorListInjective ScBit twoN vectorHL
+    (pair ScBit (ScVector ScBit oneN) scHigh (pair ScBit ScUnit scHigh scUnit))
+    (refl (List ScBit) vectorWord)
+""", "mismatch"),
     ("finite-products", PRODUCT_CHECKS, None),
     ("product-wrong-cardinality", PRODUCT_EXAMPLE + """
 def badCardinality : Eq Nat (scCardinality (Pair ScBit ScBit) bitProduct) twoN :=

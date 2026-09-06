@@ -1,0 +1,137 @@
+-- Fixed-length words as iterated products, with no proof fields to compare.
+reducible def rec ScVector : (0 A : Type 0) -> Nat -> Type 0 :=
+  fun A n => match n with
+  | zero => ScUnit
+  | succ k => Pair A (ScVector A k)
+  end
+
+reducible def scUnitDecEq : (x : ScUnit) -> (y : ScUnit) -> ScDec (Eq ScUnit x y) :=
+  fun x y => match x as a return ScDec (Eq ScUnit a y) with
+  | scUnit => match y as b return ScDec (Eq ScUnit scUnit b) with
+    | scUnit => scYes _ (refl ScUnit scUnit)
+    end
+  end
+
+reducible def scUnitFinite : ScFinite ScUnit :=
+  scFinite ScUnit (cons ScUnit scUnit (nil ScUnit))
+    (fun x => match x as a return scMember ScUnit a (cons ScUnit scUnit (nil ScUnit)) with
+      | scUnit => scLeft (Eq ScUnit scUnit scUnit) ScEmpty (refl ScUnit scUnit)
+      end)
+    (pair (ScEmpty -> ScEmpty) ScUnit (fun impossible => impossible) scUnit) scUnitDecEq
+
+reducible def rec scVectorFinite : (0 A : Type 0) -> ScFinite A ->
+    (n : Nat) -> ScFinite (ScVector A n) :=
+  fun A finite n => match n as k return ScFinite (ScVector A k) with
+  | zero => scUnitFinite
+  | succ k => scProductFinite A (ScVector A k) finite (scVectorFinite A finite k)
+  end
+
+def rec scVectorCardinality : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    Eq Nat (scCardinality (ScVector A n) (scVectorFinite A finite n))
+      (scPow (scCardinality A finite) n) :=
+  fun A finite n => match n as k return
+      Eq Nat (scCardinality (ScVector A k) (scVectorFinite A finite k))
+        (scPow (scCardinality A finite) k) with
+  | zero => refl Nat (succ zero)
+  | succ k => scEqTrans Nat
+      (scCardinality (ScVector A (succ k)) (scVectorFinite A finite (succ k)))
+      (scMul (scCardinality A finite)
+        (scCardinality (ScVector A k) (scVectorFinite A finite k)))
+      (scMul (scCardinality A finite) (scPow (scCardinality A finite) k))
+      (scProductCardinality A (ScVector A k) finite (scVectorFinite A finite k))
+      (scCong Nat Nat (fun size => scMul (scCardinality A finite) size)
+        (scCardinality (ScVector A k) (scVectorFinite A finite k))
+        (scPow (scCardinality A finite) k) (scVectorCardinality A finite k))
+  end
+
+def scVectorCountBound : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    (0 P : ScVector A n -> Type 0) -> (decide : (v : ScVector A n) -> ScDec (P v)) ->
+    ScLe (scFiniteCount (ScVector A n) P decide (scVectorFinite A finite n))
+      (scPow (scCardinality A finite) n) :=
+  fun A finite n P decide => scTransport Nat
+    (scCardinality (ScVector A n) (scVectorFinite A finite n))
+    (scPow (scCardinality A finite) n)
+    (fun bound => ScLe (scFiniteCount (ScVector A n) P decide
+      (scVectorFinite A finite n)) bound)
+    (scVectorCardinality A finite n)
+    (scFiniteCountBound (ScVector A n) P decide (scVectorFinite A finite n))
+
+reducible def rec scVectorList : (0 A : Type 0) -> (n : Nat) -> ScVector A n -> List A :=
+  fun A n => match n as k return ScVector A k -> List A with
+  | zero => fun v => nil A
+  | succ k => fun v => match v with
+    | pair x rest => cons A x (scVectorList A k rest)
+    end
+  end
+
+def rec scVectorLength : (0 A : Type 0) -> (n : Nat) -> (v : ScVector A n) ->
+    Eq Nat (scLength A (scVectorList A n v)) n :=
+  fun A n => match n as k return (v : ScVector A k) ->
+      Eq Nat (scLength A (scVectorList A k v)) k with
+  | zero => fun v => refl Nat zero
+  | succ k => fun v => match v as w return
+      Eq Nat (scLength A (scVectorList A (succ k) w)) (succ k) with
+    | pair x rest => scSuccCong (scLength A (scVectorList A k rest)) k
+        (scVectorLength A k rest)
+    end
+  end
+
+reducible def rec scListVector : (0 A : Type 0) -> (xs : List A) ->
+    ScVector A (scLength A xs) :=
+  fun A xs => match xs as ys return ScVector A (scLength A ys) with
+  | nil => scUnit
+  | cons x rest => pair A (ScVector A (scLength A rest)) x (scListVector A rest)
+  end
+
+def rec scListVectorRoundTrip : (0 A : Type 0) -> (xs : List A) ->
+    Eq (List A) (scVectorList A (scLength A xs) (scListVector A xs)) xs :=
+  fun A xs => match xs as ys return
+      Eq (List A) (scVectorList A (scLength A ys) (scListVector A ys)) ys with
+  | nil => refl (List A) (nil A)
+  | cons x rest => scCong (List A) (List A) (fun tail => cons A x tail)
+      (scVectorList A (scLength A rest) (scListVector A rest)) rest
+      (scListVectorRoundTrip A rest)
+  end
+
+def rec scVectorListInjective : (0 A : Type 0) -> (n : Nat) ->
+    (v : ScVector A n) -> (w : ScVector A n) ->
+    Eq (List A) (scVectorList A n v) (scVectorList A n w) -> Eq (ScVector A n) v w :=
+  fun A n => match n as k return (v : ScVector A k) -> (w : ScVector A k) ->
+      Eq (List A) (scVectorList A k v) (scVectorList A k w) -> Eq (ScVector A k) v w with
+  | zero => fun v w => match v as a return
+      Eq (List A) (scVectorList A zero a) (scVectorList A zero w) -> Eq ScUnit a w with
+    | scUnit => match w as b return
+        Eq (List A) (nil A) (scVectorList A zero b) -> Eq ScUnit scUnit b with
+      | scUnit => fun equal => refl ScUnit scUnit
+      end
+    end
+  | succ k => fun v w => match v as a return
+      Eq (List A) (scVectorList A (succ k) a) (scVectorList A (succ k) w) ->
+        Eq (ScVector A (succ k)) a w with
+    | pair x xs => match w as b return
+        Eq (List A) (cons A x (scVectorList A k xs)) (scVectorList A (succ k) b) ->
+          Eq (ScVector A (succ k)) (pair A (ScVector A k) x xs) b with
+      | pair y ys => fun equal => scPairCong A (ScVector A k) x y xs ys
+          (scCong (List A) A (scHeadOr A x)
+            (cons A x (scVectorList A k xs)) (cons A y (scVectorList A k ys)) equal)
+          (scVectorListInjective A k xs ys
+            (scCong (List A) (List A) (scTail A)
+              (cons A x (scVectorList A k xs)) (cons A y (scVectorList A k ys)) equal))
+      end
+    end
+  end
+
+def scVectorWordMember : (0 A : Type 0) -> (finite : ScFinite A) ->
+    (n : Nat) -> (v : ScVector A n) ->
+    scMember (List A) (scVectorList A n v) (scWords A (scElements A finite) n) :=
+  fun A finite n v => scTransport Nat (scLength A (scVectorList A n v)) n
+    (fun k => scMember (List A) (scVectorList A n v) (scWords A (scElements A finite) k))
+    (scVectorLength A n v) (scFiniteWordsComplete A finite (scVectorList A n v))
+
+check scVectorFinite
+check scVectorCardinality
+check scVectorCountBound
+check scVectorLength
+check scListVectorRoundTrip
+check scVectorListInjective
+check scVectorWordMember
