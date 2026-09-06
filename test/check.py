@@ -14,7 +14,8 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
-                  "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot"))
+                  "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot",
+                  "Polynomials.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -809,8 +810,89 @@ def rejectedSoundness : ScLe
     soundRejected soundGoal scHigh soundRejectedTree scHighNeLow
 """
 
+POLYNOMIAL_STATEMENTS = """
+def scPolynomialEvalAddAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (d : Nat) -> (p : ScPolynomial F d) -> (q : ScPolynomial F d) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d (scPolynomialAdd F plus d p q) x)
+      (plus (scPolynomialEval F plus times d p x)
+        (scPolynomialEval F plus times d q x)) := scPolynomialEvalAdd
+def scPolynomialEvalSumAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> ScPolynomial F d) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d n g) x)
+      (scSum F plus lo hi n (fun xs => scPolynomialEval F plus times d (g xs) x)) := scPolynomialEvalSum
+"""
+POLYNOMIAL_EXAMPLE = EXAMPLE + """
+reducible def polyLinear : ScPolynomial Nat oneN :=
+  pair Nat (ScPolynomial Nat zero) oneN (pair Nat ScUnit twoN scUnit)
+def polynomialAtTwo : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN polyLinear twoN)
+    (succ fourN) := refl Nat (succ fourN)
+def polynomialAtZero : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN polyLinear zero) oneN := refl Nat oneN
+def polynomialConstant : Eq Nat
+    (scPolynomialEval Nat scAdd scMul zero (pair Nat ScUnit twoN scUnit) fourN)
+    twoN := refl Nat twoN
+def polynomialAdded : Eq (ScPolynomial Nat oneN)
+    (scPolynomialAdd Nat scAdd oneN polyLinear polyLinear)
+    (pair Nat (ScPolynomial Nat zero) twoN (pair Nat ScUnit fourN scUnit)) :=
+  refl (ScPolynomial Nat oneN)
+    (pair Nat (ScPolynomial Nat zero) twoN (pair Nat ScUnit fourN scUnit))
+def polynomialCube : Eq (ScPolynomial Nat oneN)
+    (scPolynomialSum Nat scAdd zero oneN oneN oneN (fun xs => polyLinear))
+    (scPolynomialAdd Nat scAdd oneN polyLinear polyLinear) :=
+  refl (ScPolynomial Nat oneN) (scPolynomialAdd Nat scAdd oneN polyLinear polyLinear)
+def polynomialEmptyCube : Eq (ScPolynomial Nat oneN)
+    (scPolynomialSum Nat scAdd zero oneN oneN zero (fun xs => polyLinear))
+    polyLinear := refl (ScPolynomial Nat oneN) polyLinear
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("polynomial-missing-distribution", """
+def missingLaw : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (d : Nat) -> (p : ScPolynomial F d) -> (q : ScPolynomial F d) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d (scPolynomialAdd F plus d p q) x)
+      (plus (scPolynomialEval F plus times d p x)
+        (scPolynomialEval F plus times d q x)) := scPolynomialEvalAdd
+""", "mismatch"),
+    ("polynomial-missing-interchange", """
+def missingLaw : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (d : Nat) -> (p : ScPolynomial F d) -> (q : ScPolynomial F d) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d (scPolynomialAdd F plus d p q) x)
+      (plus (scPolynomialEval F plus times d p x)
+        (scPolynomialEval F plus times d q x)) := scPolynomialEvalAdd
+""", "mismatch"),
+    ("polynomial-statements", POLYNOMIAL_STATEMENTS, None),
+    ("polynomial-examples", POLYNOMIAL_EXAMPLE, None),
+    ("polynomial-wrong-evaluation", POLYNOMIAL_EXAMPLE + """
+def badPoly : Eq Nat (scPolynomialEval Nat scAdd scMul oneN polyLinear twoN) fourN := refl
+    Nat fourN
+""", "mismatch"),
+    ("polynomial-wrong-degree", POLYNOMIAL_EXAMPLE + """
+def badDegree : ScPolynomial Nat zero := polyLinear
+""", "mismatch"),
+    ("polynomial-sum-missing-branch", POLYNOMIAL_EXAMPLE + """
+def badSum : Eq (ScPolynomial Nat oneN) (scPolynomialSum Nat scAdd zero oneN oneN oneN
+    (fun xs => polyLinear)) polyLinear := refl (ScPolynomial Nat oneN) polyLinear
+""", "mismatch"),
+
     ("conditional-soundness", CONDITIONAL_SOUNDNESS_CHECKS, None),
     ("conditional-soundness-examples", CONDITIONAL_SOUNDNESS_EXAMPLES, None),
     ("soundness-missing-tree", CONDITIONAL_SOUNDNESS_EXAMPLE + """

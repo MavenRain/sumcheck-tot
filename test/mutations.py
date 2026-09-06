@@ -9,6 +9,141 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scPolynomialEvalAdd-trivialized", """def rec scPolynomialEvalAdd : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (d : Nat) -> (p : ScPolynomial F d) -> (q : ScPolynomial F d) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d (scPolynomialAdd F plus d p q) x)
+      (plus (scPolynomialEval F plus times d p x)
+        (scPolynomialEval F plus times d q x)) :=
+  fun F plus times distribute shuffle d => match d as k return
+      (p : ScPolynomial F k) -> (q : ScPolynomial F k) -> (x : F) ->
+      Eq F (scPolynomialEval F plus times k (scPolynomialAdd F plus k p q) x)
+        (plus (scPolynomialEval F plus times k p x)
+          (scPolynomialEval F plus times k q x)) with
+  | zero => fun p q x => match p as u return Eq F (scPolynomialEval F plus times zero
+            (scPolynomialAdd F plus zero u q) x)
+        (plus (scPolynomialEval F plus times zero u x)
+          (scPolynomialEval F plus times zero q x)) with
+    | pair a unit => match q as v return Eq F (scPolynomialEval F plus times zero
+            (scPolynomialAdd F plus zero (pair F ScUnit a unit) v) x)
+        (plus (scPolynomialEval F plus times zero (pair F ScUnit a unit) x)
+          (scPolynomialEval F plus times zero v x)) with
+      | pair b other => refl F (plus a b)
+      end
+    end
+  | succ k => fun p q x => match p as u return Eq F (scPolynomialEval F plus times (succ k)
+            (scPolynomialAdd F plus (succ k) u q) x)
+        (plus (scPolynomialEval F plus times (succ k) u x)
+          (scPolynomialEval F plus times (succ k) q x)) with
+    | pair a rest => match q as v return Eq F (scPolynomialEval F plus times (succ k)
+            (scPolynomialAdd F plus (succ k) (pair F (ScPolynomial F k) a rest) v) x)
+        (plus (scPolynomialEval F plus times (succ k) (pair F (ScPolynomial F k) a rest) x)
+          (scPolynomialEval F plus times (succ k) v x)) with
+      | pair b tail => scEqTrans F
+          (plus (plus a b) (times x
+            (scPolynomialEval F plus times k (scPolynomialAdd F plus k rest tail) x)))
+          (plus (plus a b) (times x (plus
+            (scPolynomialEval F plus times k rest x)
+            (scPolynomialEval F plus times k tail x))))
+          (plus (plus a (times x (scPolynomialEval F plus times k rest x)))
+            (plus b (times x (scPolynomialEval F plus times k tail x))))
+          (scCong F F (fun v => plus (plus a b) (times x v))
+            (scPolynomialEval F plus times k (scPolynomialAdd F plus k rest tail) x)
+            (plus (scPolynomialEval F plus times k rest x)
+              (scPolynomialEval F plus times k tail x))
+            (scPolynomialEvalAdd F plus times distribute shuffle k rest tail x))
+          (scEqTrans F
+            (plus (plus a b) (times x (plus
+              (scPolynomialEval F plus times k rest x)
+              (scPolynomialEval F plus times k tail x))))
+            (plus (plus a b) (plus
+              (times x (scPolynomialEval F plus times k rest x))
+              (times x (scPolynomialEval F plus times k tail x))))
+            (plus (plus a (times x (scPolynomialEval F plus times k rest x)))
+              (plus b (times x (scPolynomialEval F plus times k tail x))))
+            (scCong F F (plus (plus a b))
+              (times x (plus (scPolynomialEval F plus times k rest x)
+                (scPolynomialEval F plus times k tail x)))
+              (plus (times x (scPolynomialEval F plus times k rest x))
+                (times x (scPolynomialEval F plus times k tail x)))
+              (distribute x (scPolynomialEval F plus times k rest x)
+                (scPolynomialEval F plus times k tail x)))
+            (shuffle a b (times x (scPolynomialEval F plus times k rest x))
+              (times x (scPolynomialEval F plus times k tail x))))
+      end
+    end
+  end""",
+     """def scPolynomialEvalAdd : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (d : Nat) -> (p : ScPolynomial F d) -> (q : ScPolynomial F d) -> (x : F) ->
+    ScUnit :=
+  fun F plus times distribute shuffle d p q x => scUnit""", 1),
+    ("scPolynomialEvalSum-trivialized", """def rec scPolynomialEvalSum : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> ScPolynomial F d) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d n g) x)
+      (scSum F plus lo hi n (fun xs => scPolynomialEval F plus times d (g xs) x)) :=
+  fun F plus times distribute shuffle lo hi d n => match n as k return
+      (g : List F -> ScPolynomial F d) -> (x : F) ->
+      Eq F (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d k g) x)
+        (scSum F plus lo hi k (fun xs => scPolynomialEval F plus times d (g xs) x)) with
+  | zero => fun g x => refl F (scPolynomialEval F plus times d (g (nil F)) x)
+  | succ k => fun g x => scEqTrans F
+      (scPolynomialEval F plus times d
+        (scPolynomialSum F plus lo hi d (succ k) g) x)
+      (plus (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d k (fun xs => g
+            (cons F lo xs))) x)
+        (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d k (fun xs => g (cons F
+            hi xs))) x))
+      (plus (scSum F plus lo hi k
+          (fun xs => scPolynomialEval F plus times d (g (cons F lo xs)) x))
+        (scSum F plus lo hi k
+          (fun xs => scPolynomialEval F plus times d (g (cons F hi xs)) x)))
+      (scPolynomialEvalAdd F plus times distribute shuffle d
+        (scPolynomialSum F plus lo hi d k (fun xs => g (cons F lo xs)))
+        (scPolynomialSum F plus lo hi d k (fun xs => g (cons F hi xs))) x)
+      (scPolynomialCong2 F plus
+        (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d k (fun xs => g (cons F
+            lo xs))) x)
+        (scSum F plus lo hi k
+          (fun xs => scPolynomialEval F plus times d (g (cons F lo xs)) x))
+        (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d k (fun xs => g (cons F
+            hi xs))) x)
+        (scSum F plus lo hi k
+          (fun xs => scPolynomialEval F plus times d (g (cons F hi xs)) x))
+        (scPolynomialEvalSum F plus times distribute shuffle lo hi d k
+          (fun xs => g (cons F lo xs)) x)
+        (scPolynomialEvalSum F plus times distribute shuffle lo hi d k
+          (fun xs => g (cons F hi xs)) x))
+  end""",
+     """def scPolynomialEvalSum : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> ScPolynomial F d) -> (x : F) ->
+    ScUnit :=
+  fun F plus times distribute shuffle lo hi d n g x => scUnit""", 1),
+    ("polynomial-eval-drops-variable", """| pair a rest => plus a (times x (scPolynomialEval F plus times k rest x))""",
+     """| pair a rest => plus a (scPolynomialEval F plus times k rest x)""", 1),
+    ("polynomial-add-drops-head", """(plus a b) (scPolynomialAdd F plus k rest tail)""",
+     """a (scPolynomialAdd F plus k rest tail)""", 1),
+
     ("scConditionalSoundness-trivialized", """def rec scConditionalSoundness : (0 F : Type 0) -> (finite : ScFinite F) ->
     (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
     (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->

@@ -240,13 +240,16 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all ninety-four checks passed with checker SHA-256
+On 2026-09-06, all 101 checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The ninety-four checks:
+The 101 checks:
+
+The polynomial cases add two positive checks and five rejection controls,
+described in the bounded-degree polynomial section below.
 
 - All generic proofs check without a prelude or axioms.
 - Conditional soundness: both theorem statements check at abstract arguments.
@@ -381,7 +384,7 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check ninety-five deliberate mutations in memory. All were caught.
+suite and check 99 deliberate mutations in memory. All were caught.
 Four mutations weaken conditional soundness or corrupt a continuation's claim
 or target. Generic proofs catch the budget theorem and both tree mutations;
 the abstract soundness check catches the scaled theorem weakening.
@@ -545,6 +548,33 @@ no division or positivity assumptions. It remains conditional: polynomial
 messages, degree preservation, and a root bound must still discharge the
 agreement-tree hypothesis. A probability interpretation is not yet formalized.
 
+## Bounded-degree polynomials
+
+`src/Polynomials.tot` introduces `ScPolynomial F d`, dense ascending
+coefficients with a structural degree upper bound `d`. The constant case
+stores a coefficient and a unit value; each successor adds a coefficient.
+Leading zeros are permitted, so the index is not an exact degree and this
+representation is not canonical. `scPolynomialEval` uses Horner evaluation.
+
+`scPolynomialAdd` adds matching coefficient slots and preserves the index.
+`scPolynomialEvalAdd` proves that evaluation commutes with this addition,
+given explicit multiplication-distribution and additive-interchange laws.
+These are proof arguments; no field instance or algebraic axioms are added.
+
+`scPolynomialSum` sums a polynomial-valued family over Boolean assignments,
+retaining degree bound `d`. `scPolynomialEvalSum` proves that evaluating this
+sum equals `scSum` of the evaluated family. Thus a family of bounded-degree
+slices yields a bounded-degree sum. A multivariate representation and its
+restriction-to-slices theorem are still needed to apply this to arbitrary
+honest marginals. Acceptance does not yet enforce polynomial messages.
+
+Validation pins both public evaluation theorems at abstract arguments and
+checks constants, linear evaluation at zero and two, coefficient addition,
+and zero- and one-round sums. Rejection controls cover each missing algebraic
+law, incorrect evaluation, an insufficient degree index, and a missing sum
+branch. Four new mutations weaken the evaluation theorems or corrupt Horner
+evaluation and coefficient addition.
+
 ## Next milestones
 
 1. Finite enumeration independence is proved. Predicate monotonicity,
@@ -554,8 +584,9 @@ agreement-tree hypothesis. A probability interpretation is not yet formalized.
    and step inequalities. A conditional adaptive round bound now supplies the
    step from an exceptional-set count and bounds on other continuations.
    Conditional soundness now composes it across the strategy tree.
-2. Define polynomial messages, evaluation, restriction, degree bounds, and
-   field operations with explicit laws. Prove honest marginals preserve
+2. Bounded-degree univariate coefficients, evaluation, addition, and Boolean
+   sums are defined and verified. Add multivariate restriction and field
+   operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
@@ -573,7 +604,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
 `src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
-`src/RoundBounds.tot`, `src/ConditionalSoundness.tot`.
+`src/RoundBounds.tot`, `src/ConditionalSoundness.tot`, `src/Polynomials.tot`.
 
 ## License
 
