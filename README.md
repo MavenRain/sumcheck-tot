@@ -11,11 +11,13 @@ finite challenge sequence.
 python3 test/check.py
 ```
 
-Run from this directory. Set `TOT=/absolute/path/to/tot.exe` to select a
-different checker. The runner concatenates the foundation and proof source
+Run from this directory. The runner uses the checker named by `TOT` when
+that variable is set. Otherwise it uses the sibling checkout at
+`../tot/_build/default/bin/tot.exe` and stops with a message when that
+file is absent. The runner concatenates the foundation and proof source
 in temporary files and checks with `--no-prelude --no-axioms`. It prints the
 checker SHA-256 so validation identifies the binary actually used. No
-compiler rebuild is required.
+compiler rebuild is required when a built checker exists.
 
 ## What is proved
 
@@ -57,17 +59,32 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-05, all six checks passed with checker SHA-256
-`16127aaa167b7b766def79ef2746e07e9db44b6af194aefbb1b9ef065e0f78d8`:
+On 2026-09-06, all seven checks passed with checker SHA-256
+`30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
+from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
+the reference checker. The checks also pass on current tot builds from
+uncommitted working trees. Those hashes are not recorded here, because no
+commit reproduces them.
+
+The seven checks:
 
 - Generic completeness checks without a prelude or axioms.
 - For `g(x,y) = x+y` over naturals, the Boolean-cube sum is four and the
   honest transcript for challenges `[2,1]` is accepted.
-- The same transcript cannot be proved to accept initial claim zero.
-- An incorrect terminal evaluation is rejected.
+- The completeness proof term is rejected at initial claim zero. The type
+  mismatch is four against zero.
+- A one-round message with round sum two is rejected against claim zero.
+  Its terminal evaluation is consistent, so this control exercises the
+  round-sum equation alone. Without it, a trivial round-sum conjunct in
+  `scAccept` passes every other check.
+- An incorrect terminal evaluation is rejected. The type mismatch is zero
+  against one.
 - A forged zero message with a consistent zero round sum fails the final
   check against the constant-one function.
 - A user axiom is rejected.
+
+The negative controls show that specific proof terms are rejected. They do
+not show that the false statements are unprovable.
 
 Naturals in the concrete regression example test the algebraic equations;
 they are not presented as a finite field.
@@ -90,3 +107,8 @@ they are not presented as a finite field.
    bound as a hypothesis, label them conditional until it is discharged.
 
 Sources: `src/Foundation.tot`, `src/Completeness.tot`.
+
+## License
+
+Dual MIT OR Apache-2.0. Both texts ship with the repository: MIT in
+`LICENSE-MIT` and Apache-2.0 in `LICENSE-APACHE`. You choose either licence.
