@@ -15,7 +15,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
                   "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot",
-                  "Polynomials.tot", "PolynomialTargets.tot"))
+                  "Polynomials.tot", "PolynomialTargets.tot", "PolynomialAcceptance.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -969,8 +969,234 @@ def emptyPolynomial : ScPolynomialTrace Nat scAdd scMul oneN
     zero oneN oneN (nil Nat) linearGoal scUnit
 """
 
+POLYNOMIAL_ACCEPTANCE_STATEMENTS = """
+def scPolynomialAcceptingCountEraseAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (lo : F) -> (hi : F) ->
+    (d : Nat) -> (n : Nat) -> (strategy : ScPolynomialStrategy F d n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+      (scAcceptingCount F finite plus lo hi n
+        (scPolynomialStrategyErase F plus times d n strategy) g claim) := scPolynomialAcceptingCountErase
+def scPolynomialAcceptAlgebraicAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (trace : ScTrace F) ->
+    (g : List F -> F) -> (claim : F) ->
+    ScPolynomialAccept F plus times lo hi d trace g claim ->
+    scAccept F plus lo hi trace g claim := scPolynomialAcceptAlgebraic
+def scPolynomialAcceptDegreeAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (trace : ScTrace F) ->
+    (g : List F -> F) -> (claim : F) ->
+    ScPolynomialAccept F plus times lo hi d trace g claim ->
+    ScPolynomialTrace F plus times d trace := scPolynomialAcceptDegree
+def scHonestPolynomialCompletenessAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (cs : List F) -> (g : List F -> F) ->
+    ScPolynomialTarget F plus times d (scLength F cs) g ->
+    ScPolynomialAccept F plus times lo hi d
+      (scHonestTrace F plus lo hi cs g) g (scSum F plus lo hi (scLength F cs) g) := scHonestPolynomialCompleteness
+def scPolynomialStrategyDegreeAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (v : ScVector F n) ->
+    ScPolynomialTrace F plus times d
+      (scRunStrategy F n (scPolynomialStrategyErase F plus times d n strategy) v) := scPolynomialStrategyDegree
+def scPolynomialStrategyAcceptDecAt : (0 F : Type 0) ->
+    (finite : ScFinite F) -> (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    (v : ScVector F n) ->
+    ScDec (ScPolynomialStrategyAccept F plus times lo hi d n strategy g claim v) := scPolynomialStrategyAcceptDec
+"""
+POLYNOMIAL_ACCEPTANCE_EXAMPLE = TARGET_EXAMPLE + """
+
+def honestFull : ScPolynomialAccept Nat scAdd scMul zero oneN oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) :=
+  scHonestPolynomialCompleteness Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN challengesN linearGoal linearTarget
+def honestDegreeAgain : ScPolynomialTrace Nat scAdd scMul oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) :=
+  scPolynomialAcceptDegree Nat scAdd scMul zero oneN oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) honestFull
+def honestAlgebraicAgain : scAccept Nat scAdd zero oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) :=
+  scPolynomialAcceptAlgebraic Nat scAdd scMul zero oneN oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) honestFull
+def honestEmptyFull : ScPolynomialAccept Nat scAdd scMul zero oneN oneN
+    (scDone Nat) linearGoal (linearGoal (nil Nat)) :=
+  scHonestPolynomialCompleteness Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN (nil Nat) linearGoal scUnit
+reducible def coeffLast : ScBit -> ScPolynomialStrategy ScBit zero oneN :=
+  fun a => pair (ScPolynomial ScBit zero) (ScBit -> ScPolynomialStrategy ScBit zero zero)
+    (pair ScBit ScUnit a scUnit) (fun r => scUnit)
+reducible def coeffAdaptive : ScPolynomialStrategy ScBit zero twoN :=
+  pair (ScPolynomial ScBit zero) (ScBit -> ScPolynomialStrategy ScBit zero oneN)
+    (pair ScBit ScUnit scLow scUnit) coeffLast
+reducible def coeffPlus : ScBit -> ScBit -> ScBit := fun a b => a
+reducible def coeffTimes : ScBit -> ScBit -> ScBit := fun a b => b
+reducible def coeffVector : ScBit -> ScBit -> ScVector ScBit twoN :=
+  fun a b => pair ScBit (ScVector ScBit oneN) a (pair ScBit ScUnit b scUnit)
+reducible def coeffTrace : ScBit -> ScBit -> ScTrace ScBit := fun a b =>
+  scRunStrategy ScBit twoN
+    (scPolynomialStrategyErase ScBit coeffPlus coeffTimes zero twoN coeffAdaptive)
+    (coeffVector a b)
+def coeffHighBranch : Eq (ScTrace ScBit) (coeffTrace scHigh scLow)
+    (scStep ScBit (fun x => scLow) scHigh
+      (scStep ScBit (fun x => scHigh) scLow (scDone ScBit))) :=
+  refl (ScTrace ScBit) (scStep ScBit (fun x => scLow) scHigh
+    (scStep ScBit (fun x => scHigh) scLow (scDone ScBit)))
+def coeffDegree : ScPolynomialTrace ScBit coeffPlus coeffTimes zero
+    (coeffTrace scHigh scLow) :=
+  scPolynomialStrategyDegree ScBit coeffPlus coeffTimes zero twoN
+    coeffAdaptive (coeffVector scHigh scLow)
+
+def coeffDecisionscLowscLow : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scLow scLow))
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scLow scLow)) zero)
+    oneN := refl Nat oneN
+
+def coeffDecisionscLowscHigh : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scLow scHigh))
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scLow scHigh)) zero)
+    oneN := refl Nat oneN
+
+def coeffDecisionscHighscLow : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scHigh scLow))
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scHigh scLow)) zero)
+    zero := refl Nat zero
+
+def coeffDecisionscHighscHigh : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scHigh scHigh))
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero twoN coeffAdaptive (fun xs => scLow) scLow (coeffVector scHigh scHigh)) zero)
+    zero := refl Nat zero
+
+def coeffBadSum : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero oneN (coeffLast scHigh) (fun xs => scLow) scLow (pair ScBit ScUnit scLow scUnit))
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero oneN (coeffLast scHigh) (fun xs => scLow) scLow (pair ScBit ScUnit scLow scUnit)) zero)
+    zero := refl Nat zero
+
+def coeffBadTerminal : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero oneN (coeffLast scLow) (fun xs => scHigh) scLow (pair ScBit ScUnit scLow scUnit))
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero oneN (coeffLast scLow) (fun xs => scHigh) scLow (pair ScBit ScUnit scLow scUnit)) zero)
+    zero := refl Nat zero
+
+def coeffZeroYes : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero zero scUnit (fun xs => scLow) scLow scUnit)
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero zero scUnit (fun xs => scLow) scLow scUnit) zero)
+    oneN := refl Nat oneN
+
+def coeffZeroNo : Eq Nat
+    (scTally (ScPolynomialStrategyAccept ScBit coeffPlus coeffTimes scLow scHigh
+      zero zero scUnit (fun xs => scHigh) scLow scUnit)
+      (scPolynomialStrategyAcceptDec ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+        zero zero scUnit (fun xs => scHigh) scLow scUnit) zero)
+    zero := refl Nat zero
+"""
+
+POLYNOMIAL_ACCEPTANCE_EXAMPLE += """
+
+def coeffCountErase : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+      zero twoN coeffAdaptive (fun xs => scLow) scLow)
+    (scAcceptingCount ScBit scBitFinite coeffPlus scLow scHigh twoN
+      (scPolynomialStrategyErase ScBit coeffPlus coeffTimes zero twoN coeffAdaptive)
+      (fun xs => scLow) scLow) :=
+  scPolynomialAcceptingCountErase ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+    zero twoN coeffAdaptive (fun xs => scLow) scLow
+def coeffCountExact : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite coeffPlus coeffTimes scLow scHigh
+      zero twoN coeffAdaptive (fun xs => scLow) scLow) twoN := refl Nat twoN
+reducible def fiveN : Nat := succ fourN
+reducible def coeffLinear : ScPolynomialStrategy Nat oneN oneN :=
+  pair (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN zero)
+    polyLinear (fun r => scUnit)
+reducible def coeffLinearVector : ScVector Nat oneN := pair Nat ScUnit twoN scUnit
+def coeffLinearMessage : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN polyLinear twoN) fiveN := refl Nat fiveN
+def coeffLinearDegree : ScPolynomialTrace Nat scAdd scMul oneN
+    (scRunStrategy Nat oneN
+      (scPolynomialStrategyErase Nat scAdd scMul oneN oneN coeffLinear)
+      coeffLinearVector) :=
+  scPolynomialStrategyDegree Nat scAdd scMul oneN oneN coeffLinear coeffLinearVector
+def coeffLinearAccept : ScPolynomialStrategyAccept Nat scAdd scMul zero oneN
+    oneN oneN coeffLinear linearGoal fourN coeffLinearVector :=
+  pair (scAccept Nat scAdd zero oneN (scRunStrategy Nat oneN
+        (scPolynomialStrategyErase Nat scAdd scMul oneN oneN coeffLinear)
+        coeffLinearVector) linearGoal fourN)
+    (ScPolynomialTrace Nat scAdd scMul oneN (scRunStrategy Nat oneN
+        (scPolynomialStrategyErase Nat scAdd scMul oneN oneN coeffLinear)
+        coeffLinearVector))
+    (pair (Eq Nat (scAdd (scPolynomialEval Nat scAdd scMul oneN polyLinear zero)
+          (scPolynomialEval Nat scAdd scMul oneN polyLinear oneN)) fourN)
+      (Eq Nat (scPolynomialEval Nat scAdd scMul oneN polyLinear twoN)
+        (scRestrict Nat linearGoal twoN (nil Nat)))
+      (refl Nat fourN) (refl Nat fiveN))
+    coeffLinearDegree
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("polynomial-acceptance-statements", POLYNOMIAL_ACCEPTANCE_STATEMENTS, None),
+    ("polynomial-acceptance-examples", POLYNOMIAL_ACCEPTANCE_EXAMPLE, None),
+    ("acceptance-missing-degree", POLYNOMIAL_ACCEPTANCE_EXAMPLE + """
+def bad : ScPolynomialAccept Nat scAdd scMul zero oneN oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) :=
+  pair (scAccept Nat scAdd zero oneN
+      (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+      (scSum Nat scAdd zero oneN twoN linearGoal))
+    (ScPolynomialTrace Nat scAdd scMul oneN
+      (scHonestTrace Nat scAdd zero oneN challengesN linearGoal)) honestAlgebraic scUnit
+""", "mismatch"),
+    ("acceptance-missing-algebraic", POLYNOMIAL_ACCEPTANCE_EXAMPLE + """
+def bad : ScPolynomialAccept Nat scAdd scMul zero oneN oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) :=
+  pair (scAccept Nat scAdd zero oneN
+      (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+      (scSum Nat scAdd zero oneN twoN linearGoal))
+    (ScPolynomialTrace Nat scAdd scMul oneN
+      (scHonestTrace Nat scAdd zero oneN challengesN linearGoal)) scUnit honestDegreeAgain
+""", "mismatch"),
+    ("coefficient-strategy-wrong-degree", POLYNOMIAL_ACCEPTANCE_EXAMPLE + """
+def bad : ScPolynomialStrategy Nat zero oneN :=
+  pair (ScPolynomial Nat zero) (Nat -> ScPolynomialStrategy Nat zero zero)
+    polyLinear (fun r => scUnit)
+""", "mismatch"),
+    ("coefficient-strategy-early-stop", POLYNOMIAL_ACCEPTANCE_EXAMPLE + """
+def bad : ScPolynomialStrategy ScBit zero twoN :=
+  pair (ScPolynomial ScBit zero) (ScBit -> ScPolynomialStrategy ScBit zero oneN)
+    (pair ScBit ScUnit scLow scUnit) (fun r => scUnit)
+""", "mismatch"),
+    ("polynomial-completeness-missing-target", POLYNOMIAL_ACCEPTANCE_EXAMPLE + """
+def bad : ScPolynomialAccept Nat scAdd scMul zero oneN oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) :=
+  scHonestPolynomialCompleteness Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN challengesN linearGoal scUnit
+""", "mismatch"),
+
     ("polynomial-target-statements", TARGET_STATEMENTS, None),
     ("polynomial-target-examples", TARGET_EXAMPLE, None),
     ("target-missing-slices", TARGET_EXAMPLE + """

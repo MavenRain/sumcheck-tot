@@ -223,12 +223,21 @@ assignments; for an n-round instance only length-n assignments are queried.
 
 ## Scope and trust
 
-This is **algebraic consistency completeness**, not yet full polynomial
-sumcheck completeness or soundness. Round messages are functions rather
-than bounded-degree polynomials. There is currently no degree check,
-probability model, or soundness theorem. Adaptive strategies enforce the
-round count through their index and the challenge-vector index; bare
-`ScTrace` values and `scAccept` still carry no external round-count check.
+The project proves algebraic completeness, polynomial completeness under
+recursive target certificates and explicit distribution and interchange laws,
+and conditional counting soundness under an agreement-tree hypothesis.
+`ScPolynomialAccept` requires degree evidence for all messages; coefficient
+strategies supply this evidence by construction. The degree component is
+evidence that accompanies the transcript. The verifier does not decide it:
+`scPolynomialStrategyAcceptDec` answers with `scYes` and a constructed proof.
+Every counting and soundness result in `RoundBounds.tot` and
+`ConditionalSoundness.tot` still states its bound for the degree-free
+`scAccept`. `scPolynomialAcceptingCountErase` proves that the stronger
+relation accepts exactly the same vectors for coefficient strategies.
+The field root bound and a probability interpretation remain open. Adaptive
+strategies enforce the round count through their index and the challenge
+vector index; bare `ScTrace` values and `scAccept` carry no external
+round-count check.
 
 The standalone foundation declares `Nat`, `List`, `Pair`, and indexed
 propositional `Eq`. The finite and counting modules add empty and unit types,
@@ -240,15 +249,22 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all 109 checks passed with checker SHA-256
+On 2026-09-06, all 116 checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The 109 checks:
+The 116 checks:
 
 - All generic proofs check without a prelude or axioms.
+- Polynomial acceptance: six abstract statement checks, honest completeness
+  with both obligations, and adaptive coefficient strategies. The examples
+  also cover a degree-one natural-number strategy, all four bit challenge
+  vectors, round-sum and terminal rejection, zero rounds, and exact count
+  preservation under erasure. Five rejection controls require degree and
+  algebraic evidence, the coefficient degree and the strategy round index,
+  and the honest target certificate.
 - Polynomial targets: five abstract theorem statements, a linear target,
   challenge restriction, last-round and two-round honest marginals, degree
   evidence for honest transcripts, and the empty transcript. Six rejection
@@ -389,7 +405,7 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check 108 deliberate mutations in memory. All were caught.
+suite and check 117 deliberate mutations in memory. All were caught.
 Four mutations weaken conditional soundness or corrupt a continuation's claim
 or target. Generic proofs catch the budget theorem and both tree mutations;
 the abstract soundness check catches the scaled theorem weakening.
@@ -570,8 +586,8 @@ These are proof arguments; no field instance or algebraic axioms are added.
 retaining degree bound `d`. `scPolynomialEvalSum` proves that evaluating this
 sum equals `scSum` of the evaluated family. Thus a family of bounded-degree
 slices yields a bounded-degree sum. The target certificates below connect
-this result to honest marginals. Acceptance does not yet enforce polynomial
-messages.
+this result to honest marginals. The polynomial acceptance relation below
+requires this degree evidence for every message.
 
 Validation pins both public evaluation theorems at abstract arguments and
 checks constants, linear evaluation at zero and two, coefficient addition,
@@ -608,9 +624,9 @@ distribution and additive-interchange laws as polynomial evaluation of sums.
 transcript. `scHonestTracePolynomial` proves this property for every challenge
 list when the target has the matching recursive certificate. Together with
 `scHonestCompleteness`, this gives both degree evidence and algebraic
-acceptance for honest transcripts. The existing acceptance relation is
-unchanged and does not enforce this additional evidence for arbitrary
-provers. No field laws, root bound, or unconditional soundness are asserted.
+acceptance for honest transcripts. The polynomial acceptance relation below
+combines these obligations. No field laws, root bound, or unconditional
+soundness are asserted.
 
 The concrete example uses natural-number addition and multiplication with
 proved laws and target `1 + 2*x` in two rounds. Its first marginal evaluates
@@ -619,10 +635,59 @@ transcript properties check, as does the zero-round boundary. Abstract
 statement checks pin all five public theorems. The six rejection controls
 exercise missing obligations and a polynomial witnessing the wrong function.
 Eight new target mutations trivialize the five theorems, change the target
-restriction, or drop a transcript degree obligation. The first four theorem
-mutations fail when generic consumers apply unit as a function; the honest
-trace theorem mutation fails its abstract statement check. The remaining
-three fail at generic proofs.
+restriction, or drop a transcript degree obligation. All eight fail at the
+generic-proofs case. The five theorem mutations fail with the diagnostic
+`not a function type`, since polynomial completeness consumes the honest
+trace theorem.
+
+## Polynomial acceptance and coefficient strategies
+
+`src/PolynomialAcceptance.tot` defines `ScPolynomialAccept` as algebraic
+acceptance together with polynomial evidence for every transcript message.
+The two projection theorems recover each obligation.
+`scHonestPolynomialCompleteness` proves the combined relation for every
+honest transcript, given the recursive target certificate. The proof also
+takes the explicit distribution and additive-interchange laws used to
+construct the honest marginals.
+
+`ScPolynomialStrategy F d n` stores degree-at-most-`d` coefficients at each
+of its `n` rounds. A node fixes these coefficients before its challenge
+selects a continuation. `scPolynomialStrategyErase` evaluates the coefficients
+to produce an ordinary adaptive strategy. `scPolynomialStrategyDegree`
+proves that every execution has polynomial-message evidence, without any
+algebraic laws. The round index excludes early stopping and extra messages.
+
+`ScPolynomialStrategyAccept` applies the combined acceptance relation to
+these executions. `scPolynomialStrategyAcceptDec` supplies the degree proof
+by construction and decides the remaining algebraic equations using the
+finite carrier's equality decision. It does not decide whether an arbitrary
+function has a polynomial representation. Degree is an upper bound, and
+leading zero coefficients remain permitted.
+
+`scPolynomialAcceptingCount` counts accepted challenge vectors using this
+stronger relation. `scPolynomialAcceptingCountErase` proves exact equality
+with `scAcceptingCount` of the erased strategy: the forward implication
+projects algebraic acceptance, and the reverse adds the degree theorem.
+Existing counting results apply to coefficient strategies through this
+equality. Soundness still needs the agreement-tree hypothesis until the
+root bound and its application to polynomial messages are proved.
+
+Validation includes the natural-number honest example and a two-round bit
+strategy whose second polynomial depends on the first challenge. All four
+challenge vectors check, with exactly two accepted. Separate cases exercise
+round-sum rejection, terminal rejection, and both zero-round decisions. The
+bit example fixes plus as a first projection, and its degree-zero polynomials
+never evaluate times. A degree-one natural-number strategy evaluates
+`1 + 2x` at two, carries degree evidence, and accepts a one-round instance
+with claim four.
+Six abstract statements pin the public theorems and decision procedure;
+five rejection controls cover missing evidence, wrong degree, early stopping,
+and missing target certificates. Nine mutations trivialize the six public
+statements, remove either acceptance obligation, or select the wrong child
+when erasing a strategy. Six are caught by generic proofs; the degree
+projection, honest completeness, and count-erasure statement mutations are
+caught by the abstract statement check. No root bound or unconditional
+soundness is claimed.
 
 ## Next milestones
 
@@ -636,15 +701,18 @@ three fail at generic proofs.
 2. Bounded-degree coefficients, evaluation, addition, and Boolean sums are
    verified. Recursive target certificates now preserve degree under
    restriction and supply polynomial witnesses for honest marginals and
-   transcripts. Add a multivariate coefficient representation that constructs
-   these certificates, field operations with explicit laws, and acceptance
-   that enforces degree evidence for arbitrary prover messages.
+   transcripts. Polynomial acceptance enforces degree evidence, and
+   coefficient strategies supply it by construction with decidable acceptance
+   and exact count preservation. Add a multivariate coefficient representation
+   that constructs the target certificates, an honest coefficient-strategy
+   constructor, and field operations with explicit laws.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
 4. Adaptive strategies, enforced round counts, decidable acceptance, and the
    exact first-round count decomposition are proved. The false-claim bound
    `|F| * acceptingCount <= n * d * |F|^n` is proved under `ScAgreementTree`.
-   Add degree constraints and discharge that hypothesis from the root bound.
+   Apply the root bound to coefficient strategies and certified targets to
+   discharge the agreement-tree hypothesis.
 5. Interpret that count under independent uniform challenges to obtain
    soundness error at most `n*d/|F|`. If intermediate results take a root
    bound as a hypothesis, label them conditional until it is discharged.
@@ -656,7 +724,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
 `src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
 `src/RoundBounds.tot`, `src/ConditionalSoundness.tot`, `src/Polynomials.tot`,
-`src/PolynomialTargets.tot`.
+`src/PolynomialTargets.tot`, `src/PolynomialAcceptance.tot`.
 
 ## License
 

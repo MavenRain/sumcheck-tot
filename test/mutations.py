@@ -9,6 +9,125 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scPolynomialAcceptAlgebraic-trivialized", """def scPolynomialAcceptAlgebraic : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (trace : ScTrace F) ->
+    (g : List F -> F) -> (claim : F) ->
+    ScPolynomialAccept F plus times lo hi d trace g claim ->
+    scAccept F plus lo hi trace g claim :=
+  fun F plus times lo hi d trace g claim accepted => match accepted with
+  | pair algebraic degree => algebraic
+  end""",
+     """def scPolynomialAcceptAlgebraic : ScUnit := scUnit""", 1),
+    ("scPolynomialAcceptDegree-trivialized", """def scPolynomialAcceptDegree : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (trace : ScTrace F) ->
+    (g : List F -> F) -> (claim : F) ->
+    ScPolynomialAccept F plus times lo hi d trace g claim ->
+    ScPolynomialTrace F plus times d trace :=
+  fun F plus times lo hi d trace g claim accepted => match accepted with
+  | pair algebraic degree => degree
+  end""",
+     """def scPolynomialAcceptDegree : ScUnit := scUnit""", 1),
+    ("scHonestPolynomialCompleteness-trivialized", """def scHonestPolynomialCompleteness : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (cs : List F) -> (g : List F -> F) ->
+    ScPolynomialTarget F plus times d (scLength F cs) g ->
+    ScPolynomialAccept F plus times lo hi d
+      (scHonestTrace F plus lo hi cs g) g (scSum F plus lo hi (scLength F cs) g) :=
+  fun F plus times distribute shuffle lo hi d cs g target => pair
+    (scAccept F plus lo hi (scHonestTrace F plus lo hi cs g) g
+      (scSum F plus lo hi (scLength F cs) g))
+    (ScPolynomialTrace F plus times d (scHonestTrace F plus lo hi cs g))
+    (scHonestCompleteness F plus lo hi cs g)
+    (scHonestTracePolynomial F plus times distribute shuffle lo hi d cs g target)""",
+     """def scHonestPolynomialCompleteness : ScUnit := scUnit""", 1),
+    ("scPolynomialStrategyDegree-trivialized", """def rec scPolynomialStrategyDegree : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (v : ScVector F n) ->
+    ScPolynomialTrace F plus times d
+      (scRunStrategy F n (scPolynomialStrategyErase F plus times d n strategy) v) :=
+  fun F plus times d n => match n as k return
+      (strategy : ScPolynomialStrategy F d k) -> (v : ScVector F k) ->
+      ScPolynomialTrace F plus times d
+        (scRunStrategy F k (scPolynomialStrategyErase F plus times d k strategy) v) with
+  | zero => fun strategy v => scUnit
+  | succ k => fun strategy => match strategy as s return (v : ScVector F (succ k)) ->
+      ScPolynomialTrace F plus times d
+        (scRunStrategy F (succ k)
+          (scPolynomialStrategyErase F plus times d (succ k) s) v) with
+    | pair polynomial next => fun v => match v as w return
+        ScPolynomialTrace F plus times d
+          (scRunStrategy F (succ k) (scPolynomialStrategyErase F plus times d (succ k)
+            (pair (ScPolynomial F d) (F -> ScPolynomialStrategy F d k) polynomial next)) w) with
+      | pair r rest => pair
+          (ScPolynomialWitness F plus times d (scPolynomialEval F plus times d polynomial))
+          (ScPolynomialTrace F plus times d
+            (scRunStrategy F k (scPolynomialStrategyErase F plus times d k (next r)) rest))
+          (scPolynomialWitness F plus times d (scPolynomialEval F plus times d polynomial)
+            polynomial (fun x => refl F (scPolynomialEval F plus times d polynomial x)))
+          (scPolynomialStrategyDegree F plus times d k (next r) rest)
+      end
+    end
+  end""",
+     """def scPolynomialStrategyDegree : ScUnit := scUnit""", 1),
+    ("scPolynomialStrategyAcceptDec-trivialized", """reducible def scPolynomialStrategyAcceptDec : (0 F : Type 0) ->
+    (finite : ScFinite F) -> (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    (v : ScVector F n) ->
+    ScDec (ScPolynomialStrategyAccept F plus times lo hi d n strategy g claim v) :=
+  fun F finite plus times lo hi d n strategy g claim v => scPairDec
+    (scStrategyAccept F plus lo hi n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim v)
+    (ScPolynomialTrace F plus times d
+      (scRunStrategy F n (scPolynomialStrategyErase F plus times d n strategy) v))
+    (scStrategyAcceptDec F finite plus lo hi n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim v)
+    (scYes _ (scPolynomialStrategyDegree F plus times d n strategy v))""",
+     """def scPolynomialStrategyAcceptDec : ScUnit := scUnit""", 1),
+    ("scPolynomialAcceptingCountErase-trivialized", """def scPolynomialAcceptingCountErase : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (lo : F) -> (hi : F) ->
+    (d : Nat) -> (n : Nat) -> (strategy : ScPolynomialStrategy F d n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+      (scAcceptingCount F finite plus lo hi n
+        (scPolynomialStrategyErase F plus times d n strategy) g claim) :=
+  fun F finite plus times lo hi d n strategy g claim => scCountEquivalent (ScVector F n)
+    (ScPolynomialStrategyAccept F plus times lo hi d n strategy g claim)
+    (scStrategyAccept F plus lo hi n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim)
+    (fun v accepted => scPolynomialAcceptAlgebraic F plus times lo hi d
+      (scRunStrategy F n (scPolynomialStrategyErase F plus times d n strategy) v)
+      g claim accepted)
+    (fun v accepted => pair
+      (scStrategyAccept F plus lo hi n
+        (scPolynomialStrategyErase F plus times d n strategy) g claim v)
+      (ScPolynomialTrace F plus times d
+        (scRunStrategy F n (scPolynomialStrategyErase F plus times d n strategy) v))
+      accepted (scPolynomialStrategyDegree F plus times d n strategy v))
+    (scPolynomialStrategyAcceptDec F finite plus times lo hi d n strategy g claim)
+    (scStrategyAcceptDec F finite plus lo hi n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim)
+    (scElements (ScVector F n) (scVectorFinite F finite n))""",
+     """def scPolynomialAcceptingCountErase : ScUnit := scUnit""", 1),
+    ("acceptance-drops-algebraic", """fun F plus times lo hi d trace g claim => Pair
+    (scAccept F plus lo hi trace g claim)
+    (ScPolynomialTrace F plus times d trace)""",
+     """fun F plus times lo hi d trace g claim => Pair
+    ScUnit (ScPolynomialTrace F plus times d trace)""", 1),
+    ("acceptance-drops-degree", """fun F plus times lo hi d trace g claim => Pair
+    (scAccept F plus lo hi trace g claim)
+    (ScPolynomialTrace F plus times d trace)""",
+     """fun F plus times lo hi d trace g claim => Pair
+    (scAccept F plus lo hi trace g claim) ScUnit""", 1),
+    ("coefficient-erasure-wrong-child", """(fun r => scPolynomialStrategyErase F plus times d k (next r))""",
+     """(fun r => scPolynomialStrategyErase F plus times d k
+          (next (scPolynomialEval F plus times d polynomial r)))""", 1),
     ("scWitnessEvaluation-trivialized", """def scWitnessEvaluation : (0 F : Type 0) ->
     (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) ->
     (f : F -> F) -> (w : ScPolynomialWitness F plus times d f) -> (x : F) ->
@@ -1740,6 +1859,10 @@ MUTATIONS = [
 
 # Removing a refutation function first fails when an existing proof applies it.
 MUTATION_DIAGNOSTICS = {
+    "scPolynomialAcceptAlgebraic-trivialized": "not a function type: scunit",
+    "scPolynomialStrategyDegree-trivialized": "not a function type: scunit",
+    "scPolynomialStrategyAcceptDec-trivialized": "not a function type: scunit",
+    "scHonestTracePolynomial-trivialized": "not a function type: scunit",
     "unique-drops-head-obligation": "not a function type: scunit",
     "scWitnessEvaluation-trivialized": "not a function type: scunit",
     "scPolynomialTargetRestrict-trivialized": "not a function type: scunit",
