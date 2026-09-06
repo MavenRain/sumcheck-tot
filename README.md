@@ -24,6 +24,9 @@ Counts respect predicate implication and equivalence, are independent of
 the decision procedure, add over appended lists, and satisfy a binary union bound.
 Expansion and product counts split into sums of block counts. A uniform bound
 `d` on each fiber of a finite product gives a total bound `|A| * d`.
+Natural-number bounds compose by transitivity and multiplication monotonicity.
+Multiplication distributes over addition in its first factor and is associative;
+powers satisfy `q^(n+m) = q^n * q^m`, including zero bases and exponents.
 
 ## Check
 
@@ -148,6 +151,17 @@ compiler rebuild is required when a built checker exists.
   lemma: callers must supply the fiber bound; it is not a root bound or
   a sumcheck soundness result.
 
+- `scMulZeroRight` proves `n * 0 = 0`; `scAddMul` proves
+  `(n + m) * k = n * k + m * k`; `scMulAssoc` proves
+  `(n * m) * k = n * (m * k)`.
+- `scLeTrans` composes `n <= m` and `m <= k` into `n <= k`.
+  `scMulMonoLeft` and `scMulMonoRight` preserve an inequality when multiplying
+  by a fixed left or right factor. `scMulMono` combines two inequalities:
+  `n <= m` and `k <= l` imply `n * k <= m * l`.
+- `scPowAdd` splits a power at an exponent sum. These arithmetic lemmas
+  assume no positivity, retain `0^0 = 1`, and live in `Arithmetic.tot`,
+  after the existing arithmetic helpers in `FiberCounting.tot`.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -181,22 +195,28 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all forty-nine checks passed with checker SHA-256
+On 2026-09-06, all fifty-five checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The forty-nine checks:
+The fifty-five checks:
 
+- All generic proofs check without a prelude or axioms.
+- All eight public arithmetic theorems check at abstract arguments.
+- Concrete arithmetic checks cover strict inequalities, zero factors,
+  distribution, associativity, exponent addition, and zero bases and exponents.
+- Order transitivity used in the reverse direction is rejected.
+- Multiplication monotonicity omitting the upper bound's factor is rejected.
+- Multiplication monotonicity used in the reverse direction is rejected.
+- Exponent addition with the wrong second exponent is rejected.
 - All six public fiber-counting theorems check at abstract arguments.
 - Concrete fiber checks cover varying block lengths, repeated entries and
   labels, empty expansion, a sharp finite-product bound, and empty factors.
 - A uniform sum bound without the pointwise hypothesis is rejected.
 - An expansion bound omitting the number of blocks is rejected.
 - A product count with swapped predicate coordinates is rejected.
-
-- All generic proofs check without a prelude or axioms.
 - All five public counting-algebra theorems check at abstract arguments.
 - Disjunction decisions cover all four truth combinations; concrete counting
   checks cover repeated entries, appended lists, overlapping predicates,
@@ -271,7 +291,11 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check forty deliberate mutations in memory. All forty were caught.
+suite and check forty-eight deliberate mutations in memory. All forty-eight
+were caught. Eight arithmetic mutations replace each theorem with a reflexive
+statement and proof. Generic consumers reject five; abstract-argument checks
+reject the trivialized right-zero law, combined multiplication monotonicity,
+and exponent-addition law.
 The mutation battery also includes six consistent statement trivializations
 for the fiber-counting theorems. Their generic consumers or abstract-argument
 checks reject them.
@@ -315,9 +339,11 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 ## Next milestones
 
-1. Establish enumeration independence and prove the remaining arithmetic
-   needed for soundness. Predicate monotonicity, decision independence,
-   append additivity, and the binary union bound are now proved; independence
+1. Establish enumeration independence and complete the arithmetic needed
+   for the soundness recurrence. Multiplication associativity, distribution
+   over a sum in the first factor, order transitivity, multiplication
+   monotonicity, and exponent addition are proved. Predicate monotonicity,
+   decision independence, append additivity, and the binary union bound are proved; independence
    from the finite enumeration remains open. Product fiber decomposition and
    uniform fiber bounds are proved; adaptive strategy counting remains open.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
@@ -336,7 +362,8 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
-`src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`.
+`src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
+`src/Arithmetic.tot`.
 
 ## License
 

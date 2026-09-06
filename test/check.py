@@ -11,7 +11,8 @@ TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
-                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot", "CountingAlgebra.tot", "FiberCounting.tot"))
+                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
+                  "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -314,8 +315,86 @@ def fiberEmptyLeft : ScLe zero zero :=
     (fun x => match x with end)
 """
 
+ARITHMETIC_CHECKS = """
+def scMulZeroRightAt : (n : Nat) -> Eq Nat (scMul n zero) zero :=
+  fun n => scMulZeroRight n
+def scAddMulAt : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scMul (scAdd n m) k) (scAdd (scMul n k) (scMul m k)) :=
+  fun n m k => scAddMul n m k
+def scMulAssocAt : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scMul (scMul n m) k) (scMul n (scMul m k)) :=
+  fun n m k => scMulAssoc n m k
+def scLeTransAt : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> ScLe m k -> ScLe n k :=
+  fun n m first k second => scLeTrans n m first k second
+def scMulMonoLeftAt : (k : Nat) -> (n : Nat) -> (m : Nat) -> ScLe n m ->
+    ScLe (scMul k n) (scMul k m) :=
+  fun k n m bound => scMulMonoLeft k n m bound
+def scMulMonoRightAt : (n : Nat) -> (m : Nat) -> ScLe n m -> (k : Nat) ->
+    ScLe (scMul n k) (scMul m k) :=
+  fun n m bound k => scMulMonoRight n m bound k
+def scMulMonoAt : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> (l : Nat) -> ScLe k l -> ScLe (scMul n k) (scMul m l) :=
+  fun n m first k l second => scMulMono n m first k l second
+def scPowAddAt : (q : Nat) -> (n : Nat) -> (m : Nat) ->
+    Eq Nat (scPow q (scAdd n m)) (scMul (scPow q n) (scPow q m)) :=
+  fun q n m => scPowAdd q n m
+"""
+
+ARITHMETIC_EXAMPLES = EXAMPLE + """
+def arithmeticZero : Eq Nat (scMul twoN zero) zero := scMulZeroRight twoN
+def arithmeticDistribution : Eq Nat
+    (scMul (scAdd oneN twoN) twoN) (scAdd twoN fourN) := scAddMul oneN twoN twoN
+def arithmeticAssoc : Eq Nat (scMul (scMul twoN oneN) twoN) fourN :=
+  scMulAssoc twoN oneN twoN
+def arithmeticTrans : ScLe oneN fourN :=
+  scLeTrans oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN))
+    fourN (scLeSucc oneN (succ twoN) (scLeSucc zero twoN (scLeZero twoN)))
+def arithmeticLeftSlack : ScLe twoN fourN :=
+  scMulMonoLeft twoN oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN))
+def arithmeticRightSlack : ScLe twoN fourN :=
+  scMulMonoRight oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN)) twoN
+def arithmeticBothSlack : ScLe oneN fourN :=
+  scMulMono oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN))
+    oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN))
+def arithmeticLeftZero : ScLe zero zero :=
+  scMulMonoLeft zero oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN))
+def arithmeticRightZero : ScLe zero zero :=
+  scMulMonoRight oneN twoN (scLeWeaken oneN oneN (scLeRefl oneN)) zero
+def arithmeticEmptyLower : ScLe zero fourN :=
+  scMulMonoRight zero twoN (scLeZero twoN) twoN
+def arithmeticZeroPower : Eq Nat (scPow zero (scAdd zero zero)) oneN :=
+  scPowAdd zero zero zero
+def arithmeticEmptyPower : Eq Nat (scPow zero (scAdd zero twoN)) zero :=
+  scPowAdd zero zero twoN
+def arithmeticPower : Eq Nat (scPow twoN (scAdd oneN oneN)) fourN :=
+  scPowAdd twoN oneN oneN
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ('arithmetic', ARITHMETIC_CHECKS, None),
+    ('arithmetic-examples', ARITHMETIC_EXAMPLES, None),
+    ('order-transitivity-reversed', """
+def badTrans : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> ScLe m k -> ScLe k n :=
+  fun n m first k second => scLeTrans n m first k second
+""", "mismatch"),
+    ('multiplication-omits-factor', """
+def badMul : (n : Nat) -> (m : Nat) -> ScLe n m -> (k : Nat) ->
+    ScLe (scMul n k) m :=
+  fun n m bound k => scMulMonoRight n m bound k
+""", "mismatch"),
+    ('multiplication-reversed-bound', """
+def badMul : (k : Nat) -> (n : Nat) -> (m : Nat) -> ScLe n m ->
+    ScLe (scMul k m) (scMul k n) :=
+  fun k n m bound => scMulMonoLeft k n m bound
+""", "mismatch"),
+    ('power-add-wrong-exponent', """
+def badPow : (q : Nat) -> (n : Nat) -> (m : Nat) ->
+    Eq Nat (scPow q (scAdd n m)) (scMul (scPow q n) (scPow q n)) :=
+  fun q n m => scPowAdd q n m
+""", "mismatch"),
     ('fiber-counting', FIBER_CHECKS, None),
     ('fiber-examples', FIBER_EXAMPLES, None),
     ('fiber-bound-missing-hypothesis', """

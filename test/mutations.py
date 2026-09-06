@@ -9,6 +9,120 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scMulZeroRight-trivialized", """def rec scMulZeroRight : (n : Nat) -> Eq Nat (scMul n zero) zero :=
+  fun n => match n as a return Eq Nat (scMul a zero) zero with
+  | zero => refl Nat zero
+  | succ a => scMulZeroRight a
+  end""",
+     """def scMulZeroRight : (n : Nat) -> Eq Nat (scMul n zero) (scMul n zero) :=
+  fun n => refl Nat (scMul n zero)""", 1),
+    ("scAddMul-trivialized", """def rec scAddMul : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scMul (scAdd n m) k) (scAdd (scMul n k) (scMul m k)) :=
+  fun n m k => match n as a return
+      Eq Nat (scMul (scAdd a m) k) (scAdd (scMul a k) (scMul m k)) with
+  | zero => refl Nat (scMul m k)
+  | succ a => scEqTrans Nat
+      (scAdd k (scMul (scAdd a m) k))
+      (scAdd k (scAdd (scMul a k) (scMul m k)))
+      (scAdd (scAdd k (scMul a k)) (scMul m k))
+      (scCong Nat Nat (scAdd k) (scMul (scAdd a m) k)
+        (scAdd (scMul a k) (scMul m k)) (scAddMul a m k))
+      (scEqSym Nat (scAdd (scAdd k (scMul a k)) (scMul m k))
+        (scAdd k (scAdd (scMul a k) (scMul m k)))
+        (scAddAssoc k (scMul a k) (scMul m k)))
+  end""",
+     """def scAddMul : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scMul (scAdd n m) k) (scMul (scAdd n m) k) :=
+  fun n m k => refl Nat (scMul (scAdd n m) k)""", 1),
+    ("scMulAssoc-trivialized", """def rec scMulAssoc : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scMul (scMul n m) k) (scMul n (scMul m k)) :=
+  fun n m k => match n as a return
+      Eq Nat (scMul (scMul a m) k) (scMul a (scMul m k)) with
+  | zero => refl Nat zero
+  | succ a => scEqTrans Nat
+      (scMul (scAdd m (scMul a m)) k)
+      (scAdd (scMul m k) (scMul (scMul a m) k))
+      (scAdd (scMul m k) (scMul a (scMul m k)))
+      (scAddMul m (scMul a m) k)
+      (scCong Nat Nat (scAdd (scMul m k))
+        (scMul (scMul a m) k) (scMul a (scMul m k)) (scMulAssoc a m k))
+  end""",
+     """def scMulAssoc : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scMul (scMul n m) k) (scMul (scMul n m) k) :=
+  fun n m k => refl Nat (scMul (scMul n m) k)""", 1),
+    ("scLeTrans-trivialized", """def rec scLeTrans : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> ScLe m k -> ScLe n k :=
+  fun n => match n as a return (m : Nat) -> ScLe a m ->
+      (k : Nat) -> ScLe m k -> ScLe a k with
+  | zero => fun m first k second => scLeZero k
+  | succ a => fun m => match m as b return ScLe (succ a) b ->
+      (k : Nat) -> ScLe b k -> ScLe (succ a) k with
+    | zero => fun first k second => match scLeSuccZeroAbsurd a first with end
+    | succ b => fun first k => match k as c return
+        ScLe (succ b) c -> ScLe (succ a) c with
+      | zero => fun second => match scLeSuccZeroAbsurd b second with end
+      | succ c => fun second => scLeSucc a c
+          (scLeTrans a b (scLePred (succ a) (succ b) first) c
+            (scLePred (succ b) (succ c) second))
+      end
+    end
+  end""",
+     """def scLeTrans : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> ScLe m k -> ScLe n n :=
+  fun n m first k second => scLeRefl n""", 1),
+    ("scMulMonoLeft-trivialized", """def rec scMulMonoLeft : (k : Nat) -> (n : Nat) -> (m : Nat) -> ScLe n m ->
+    ScLe (scMul k n) (scMul k m) :=
+  fun k n m bound => match k as a return ScLe (scMul a n) (scMul a m) with
+  | zero => scLeZero zero
+  | succ a => scAddLe n m bound (scMul a n) (scMul a m)
+      (scMulMonoLeft a n m bound)
+  end""",
+     """def scMulMonoLeft : (k : Nat) -> (n : Nat) -> (m : Nat) -> ScLe n m ->
+    ScLe (scMul k n) (scMul k n) :=
+  fun k n m bound => scLeRefl (scMul k n)""", 1),
+    ("scMulMonoRight-trivialized", """def rec scMulMonoRight : (n : Nat) -> (m : Nat) -> ScLe n m -> (k : Nat) ->
+    ScLe (scMul n k) (scMul m k) :=
+  fun n => match n as a return (m : Nat) -> ScLe a m -> (k : Nat) ->
+      ScLe (scMul a k) (scMul m k) with
+  | zero => fun m bound k => scLeZero (scMul m k)
+  | succ a => fun m => match m as b return ScLe (succ a) b -> (k : Nat) ->
+        ScLe (scMul (succ a) k) (scMul b k) with
+    | zero => fun bound k => match scLeSuccZeroAbsurd a bound with end
+    | succ b => fun bound k => scAddLe k k (scLeRefl k)
+        (scMul a k) (scMul b k)
+        (scMulMonoRight a b (scLePred (succ a) (succ b) bound) k)
+    end
+  end""",
+     """def scMulMonoRight : (n : Nat) -> (m : Nat) -> ScLe n m -> (k : Nat) ->
+    ScLe (scMul n k) (scMul n k) :=
+  fun n m bound k => scLeRefl (scMul n k)""", 1),
+    ("scMulMono-trivialized", """def scMulMono : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> (l : Nat) -> ScLe k l -> ScLe (scMul n k) (scMul m l) :=
+  fun n m first k l second => scLeTrans
+    (scMul n k) (scMul m k) (scMulMonoRight n m first k)
+    (scMul m l) (scMulMonoLeft m k l second)""",
+     """def scMulMono : (n : Nat) -> (m : Nat) -> ScLe n m ->
+    (k : Nat) -> (l : Nat) -> ScLe k l -> ScLe (scMul n k) (scMul n k) :=
+  fun n m first k l second => scLeRefl (scMul n k)""", 1),
+    ("scPowAdd-trivialized", """def rec scPowAdd : (q : Nat) -> (n : Nat) -> (m : Nat) ->
+    Eq Nat (scPow q (scAdd n m)) (scMul (scPow q n) (scPow q m)) :=
+  fun q n m => match n as a return
+      Eq Nat (scPow q (scAdd a m)) (scMul (scPow q a) (scPow q m)) with
+  | zero => scEqSym Nat (scAdd (scPow q m) zero) (scPow q m)
+      (scAddZeroRight (scPow q m))
+  | succ a => scEqTrans Nat
+      (scMul q (scPow q (scAdd a m)))
+      (scMul q (scMul (scPow q a) (scPow q m)))
+      (scMul (scMul q (scPow q a)) (scPow q m))
+      (scCong Nat Nat (scMul q) (scPow q (scAdd a m))
+        (scMul (scPow q a) (scPow q m)) (scPowAdd q a m))
+      (scEqSym Nat (scMul (scMul q (scPow q a)) (scPow q m))
+        (scMul q (scMul (scPow q a) (scPow q m)))
+        (scMulAssoc q (scPow q a) (scPow q m)))
+  end""",
+     """def scPowAdd : (q : Nat) -> (n : Nat) -> (m : Nat) ->
+    Eq Nat (scPow q (scAdd n m)) (scPow q (scAdd n m)) :=
+  fun q n m => refl Nat (scPow q (scAdd n m))""", 1),
     ("scSumOverCong-trivialized", """def rec scSumOverCong : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
     ((x : A) -> Eq Nat (f x) (g x)) -> (xs : List A) ->
     Eq Nat (scSumOver A f xs) (scSumOver A g xs) :=
