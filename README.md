@@ -240,18 +240,23 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all 101 checks passed with checker SHA-256
+On 2026-09-06, all 109 checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The 101 checks:
-
-The polynomial cases add two positive checks and five rejection controls,
-described in the bounded-degree polynomial section below.
+The 109 checks:
 
 - All generic proofs check without a prelude or axioms.
+- Polynomial targets: five abstract theorem statements, a linear target,
+  challenge restriction, last-round and two-round honest marginals, degree
+  evidence for honest transcripts, and the empty transcript. Six rejection
+  controls require slices, children, correct witness evaluation, a target
+  certificate, and both message and tail degree evidence.
+- Polynomial coefficients: two abstract evaluation statements, concrete
+  constants and linear polynomials, addition and Boolean sums, and five
+  rejection controls for missing laws, wrong evaluation, degree, or sum.
 - Conditional soundness: both theorem statements check at abstract arguments.
   Examples cover a sharp one-round bound, an adaptive strategy accepting three
   of four vectors, the scaled bound, zero rounds, and rejection with zero budget.
@@ -384,7 +389,7 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check 99 deliberate mutations in memory. All were caught.
+suite and check 108 deliberate mutations in memory. All were caught.
 Four mutations weaken conditional soundness or corrupt a continuation's claim
 or target. Generic proofs catch the budget theorem and both tree mutations;
 the abstract soundness check catches the scaled theorem weakening.
@@ -564,16 +569,60 @@ These are proof arguments; no field instance or algebraic axioms are added.
 `scPolynomialSum` sums a polynomial-valued family over Boolean assignments,
 retaining degree bound `d`. `scPolynomialEvalSum` proves that evaluating this
 sum equals `scSum` of the evaluated family. Thus a family of bounded-degree
-slices yields a bounded-degree sum. A multivariate representation and its
-restriction-to-slices theorem are still needed to apply this to arbitrary
-honest marginals. Acceptance does not yet enforce polynomial messages.
+slices yields a bounded-degree sum. The target certificates below connect
+this result to honest marginals. Acceptance does not yet enforce polynomial
+messages.
 
 Validation pins both public evaluation theorems at abstract arguments and
 checks constants, linear evaluation at zero and two, coefficient addition,
 and zero- and one-round sums. Rejection controls cover each missing algebraic
 law, incorrect evaluation, an insufficient degree index, and a missing sum
 branch. Four new mutations weaken the evaluation theorems or corrupt Horner
-evaluation and coefficient addition.
+evaluation and coefficient addition. The three implementation mutations
+fail at generic proofs; the evaluation-of-sums statement mutation now also
+fails there because the marginal theorem consumes it. A fifth mutation drops
+the high branch of `scPolynomialSum` and fails at generic proofs.
+
+## Polynomial targets and honest transcripts
+
+`src/PolynomialTargets.tot` adds `ScPolynomialWitness`, pairing concrete
+coefficients of degree at most `d` with pointwise evaluation evidence for a
+function. Its projections expose the polynomial and its evaluation theorem.
+
+`ScPolynomialTarget F plus times d n g` is a recursive semantic certificate
+of individual degree for a list-valued target with `n` remaining coordinates.
+At a successor it contains a polynomial witness for every head-coordinate
+slice and a certificate for every challenge restriction. At zero it is unit.
+Slices are required for all tail lists, including the Boolean lists used by
+sumcheck. This is stronger than a certificate restricted to fixed-length
+tails; it is not a canonical multivariate coefficient tensor.
+`scPolynomialTargetRestrict` preserves the degree bound and removes one round.
+
+`scSumCong` lifts pointwise equality through Boolean sums without algebraic
+laws or function extensionality. `scPolynomialMarginal` sums the slice
+coefficients and uses `scPolynomialEvalSum` and `scSumCong` to prove that the
+result evaluates to the honest marginal. It requires only the same explicit
+distribution and additive-interchange laws as polynomial evaluation of sums.
+
+`ScPolynomialTrace` records a polynomial witness for every message in a
+transcript. `scHonestTracePolynomial` proves this property for every challenge
+list when the target has the matching recursive certificate. Together with
+`scHonestCompleteness`, this gives both degree evidence and algebraic
+acceptance for honest transcripts. The existing acceptance relation is
+unchanged and does not enforce this additional evidence for arbitrary
+provers. No field laws, root bound, or unconditional soundness are asserted.
+
+The concrete example uses natural-number addition and multiplication with
+proved laws and target `1 + 2*x` in two rounds. Its first marginal evaluates
+to ten at two; its restricted last-round target is constant five. Both
+transcript properties check, as does the zero-round boundary. Abstract
+statement checks pin all five public theorems. The six rejection controls
+exercise missing obligations and a polynomial witnessing the wrong function.
+Eight new target mutations trivialize the five theorems, change the target
+restriction, or drop a transcript degree obligation. The first four theorem
+mutations fail when generic consumers apply unit as a function; the honest
+trace theorem mutation fails its abstract statement check. The remaining
+three fail at generic proofs.
 
 ## Next milestones
 
@@ -584,10 +633,12 @@ evaluation and coefficient addition.
    and step inequalities. A conditional adaptive round bound now supplies the
    step from an exceptional-set count and bounds on other continuations.
    Conditional soundness now composes it across the strategy tree.
-2. Bounded-degree univariate coefficients, evaluation, addition, and Boolean
-   sums are defined and verified. Add multivariate restriction and field
-   operations with explicit laws. Prove honest marginals preserve
-   the required degree bound, then extend acceptance and completeness.
+2. Bounded-degree coefficients, evaluation, addition, and Boolean sums are
+   verified. Recursive target certificates now preserve degree under
+   restriction and supply polynomial witnesses for honest marginals and
+   transcripts. Add a multivariate coefficient representation that constructs
+   these certificates, field operations with explicit laws, and acceptance
+   that enforces degree evidence for arbitrary prover messages.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
 4. Adaptive strategies, enforced round counts, decidable acceptance, and the
@@ -604,7 +655,8 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
 `src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
-`src/RoundBounds.tot`, `src/ConditionalSoundness.tot`, `src/Polynomials.tot`.
+`src/RoundBounds.tot`, `src/ConditionalSoundness.tot`, `src/Polynomials.tot`,
+`src/PolynomialTargets.tot`.
 
 ## License
 

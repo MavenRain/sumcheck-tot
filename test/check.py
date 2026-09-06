@@ -15,7 +15,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
                   "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot",
-                  "Polynomials.tot"))
+                  "Polynomials.tot", "PolynomialTargets.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -857,8 +857,169 @@ def polynomialEmptyCube : Eq (ScPolynomial Nat oneN)
     polyLinear := refl (ScPolynomial Nat oneN) polyLinear
 """
 
+TARGET_STATEMENTS = """
+def scWitnessEvaluationAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) ->
+    (f : F -> F) -> (w : ScPolynomialWitness F plus times d f) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d
+      (scWitnessPolynomial F plus times d f w) x) (f x) := scWitnessEvaluation
+def scPolynomialTargetRestrictAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> F) -> ScPolynomialTarget F plus times d (succ n) g ->
+    (r : F) -> ScPolynomialTarget F plus times d n (scRestrict F g r) := scPolynomialTargetRestrict
+def scSumCongAt : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (g : List F -> F) -> (h : List F -> F) ->
+    ((xs : List F) -> Eq F (g xs) (h xs)) ->
+    Eq F (scSum F plus lo hi n g) (scSum F plus lo hi n h) := scSumCong
+def scPolynomialMarginalAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) -> (g : List F -> F) ->
+    ScPolynomialTarget F plus times d (succ n) g ->
+    ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g) := scPolynomialMarginal
+def scHonestTracePolynomialAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (challenges : List F) ->
+    (g : List F -> F) -> ScPolynomialTarget F plus times d (scLength F challenges) g ->
+    ScPolynomialTrace F plus times d (scHonestTrace F plus lo hi challenges g) := scHonestTracePolynomial
+"""
+TARGET_EXAMPLE = POLYNOMIAL_EXAMPLE + """
+
+def targetDistribute : (x : Nat) -> (a : Nat) -> (b : Nat) ->
+    Eq Nat (scMul x (scAdd a b)) (scAdd (scMul x a) (scMul x b)) :=
+  fun x a b => scEqTrans Nat (scMul x (scAdd a b)) (scMul (scAdd a b) x)
+    (scAdd (scMul x a) (scMul x b)) (scMulComm x (scAdd a b))
+    (scEqTrans Nat (scMul (scAdd a b) x) (scAdd (scMul a x) (scMul b x))
+      (scAdd (scMul x a) (scMul x b)) (scAddMul a b x)
+      (scPolynomialCong2 Nat scAdd (scMul a x) (scMul x a) (scMul b x) (scMul x b)
+        (scMulComm a x) (scMulComm b x)))
+def targetShuffle : (a : Nat) -> (b : Nat) -> (c : Nat) -> (e : Nat) ->
+    Eq Nat (scAdd (scAdd a b) (scAdd c e)) (scAdd (scAdd a c) (scAdd b e)) :=
+  fun a b c e => scEqTrans Nat (scAdd (scAdd a b) (scAdd c e))
+    (scAdd a (scAdd b (scAdd c e))) (scAdd (scAdd a c) (scAdd b e))
+    (scAddAssoc a b (scAdd c e))
+    (scEqTrans Nat (scAdd a (scAdd b (scAdd c e)))
+      (scAdd a (scAdd c (scAdd b e))) (scAdd (scAdd a c) (scAdd b e))
+      (scCong Nat Nat (scAdd a) (scAdd b (scAdd c e)) (scAdd c (scAdd b e))
+        (scAddSwap b c e))
+      (scEqSym Nat (scAdd (scAdd a c) (scAdd b e))
+        (scAdd a (scAdd c (scAdd b e))) (scAddAssoc a c (scAdd b e))))
+reducible def constantPoly : Nat -> ScPolynomial Nat oneN :=
+  fun a => pair Nat (ScPolynomial Nat zero) a (pair Nat ScUnit zero scUnit)
+def constantEval : (a : Nat) -> (x : Nat) ->
+    Eq Nat (scPolynomialEval Nat scAdd scMul oneN (constantPoly a) x) a :=
+  fun a x => scEqTrans Nat (scAdd a (scMul x zero)) (scAdd a zero) a
+    (scCong Nat Nat (scAdd a) (scMul x zero) zero (scMulZeroRight x)) (scAddZeroRight a)
+def rec constantTarget : (n : Nat) -> (a : Nat) ->
+    ScPolynomialTarget Nat scAdd scMul oneN n (fun xs => a) :=
+  fun n => match n as k return (a : Nat) ->
+      ScPolynomialTarget Nat scAdd scMul oneN k (fun xs => a) with
+  | zero => fun a => scUnit
+  | succ k => fun a => pair
+      ((xs : List Nat) -> ScPolynomialWitness Nat scAdd scMul oneN (fun x => a))
+      ((r : Nat) -> ScPolynomialTarget Nat scAdd scMul oneN k (fun xs => a))
+      (fun xs => scPolynomialWitness Nat scAdd scMul oneN (fun x => a)
+        (constantPoly a) (constantEval a))
+      (fun r => constantTarget k a)
+  end
+reducible def linearGoal : List Nat -> Nat := fun xs =>
+  scPolynomialEval Nat scAdd scMul oneN polyLinear (scHeadOr Nat zero xs)
+def linearTarget : ScPolynomialTarget Nat scAdd scMul oneN twoN linearGoal :=
+  pair
+    ((xs : List Nat) -> ScPolynomialWitness Nat scAdd scMul oneN
+      (fun x => linearGoal (cons Nat x xs)))
+    ((r : Nat) -> ScPolynomialTarget Nat scAdd scMul oneN oneN
+      (scRestrict Nat linearGoal r))
+    (fun xs => scPolynomialWitness Nat scAdd scMul oneN
+      (fun x => linearGoal (cons Nat x xs)) polyLinear
+      (fun x => refl Nat (scPolynomialEval Nat scAdd scMul oneN polyLinear x)))
+    (fun r => constantTarget oneN (scPolynomialEval Nat scAdd scMul oneN polyLinear r))
+def linearMarginal : ScPolynomialWitness Nat scAdd scMul oneN
+    (scMarginal Nat scAdd zero oneN oneN linearGoal) :=
+  scPolynomialMarginal Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN oneN linearGoal linearTarget
+def linearMarginalValue : Eq Nat
+    (scMarginal Nat scAdd zero oneN oneN linearGoal twoN)
+    (scAdd (succ fourN) (succ fourN)) := refl Nat (scAdd (succ fourN) (succ fourN))
+def linearRestriction : ScPolynomialTarget Nat scAdd scMul oneN oneN
+    (scRestrict Nat linearGoal twoN) :=
+  scPolynomialTargetRestrict Nat scAdd scMul oneN oneN linearGoal linearTarget twoN
+def lastMarginal : ScPolynomialWitness Nat scAdd scMul oneN
+    (scMarginal Nat scAdd zero oneN zero (scRestrict Nat linearGoal twoN)) :=
+  scPolynomialMarginal Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN zero (scRestrict Nat linearGoal twoN) linearRestriction
+def honestPolynomial : ScPolynomialTrace Nat scAdd scMul oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) :=
+  scHonestTracePolynomial Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN challengesN linearGoal linearTarget
+def honestAlgebraic : scAccept Nat scAdd zero oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) :=
+  scHonestCompleteness Nat scAdd zero oneN challengesN linearGoal
+def emptyPolynomial : ScPolynomialTrace Nat scAdd scMul oneN
+    (scHonestTrace Nat scAdd zero oneN (nil Nat) linearGoal) :=
+  scHonestTracePolynomial Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN (nil Nat) linearGoal scUnit
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("polynomial-target-statements", TARGET_STATEMENTS, None),
+    ("polynomial-target-examples", TARGET_EXAMPLE, None),
+    ("target-missing-slices", TARGET_EXAMPLE + """
+def bad : ScPolynomialTarget Nat scAdd scMul oneN twoN linearGoal :=
+  pair
+    ((xs : List Nat) -> ScPolynomialWitness Nat scAdd scMul oneN
+      (fun x => linearGoal (cons Nat x xs)))
+    ((r : Nat) -> ScPolynomialTarget Nat scAdd scMul oneN oneN
+      (scRestrict Nat linearGoal r)) scUnit
+    (fun r => constantTarget oneN (scPolynomialEval Nat scAdd scMul oneN polyLinear r))
+""", "mismatch"),
+    ("target-missing-children", TARGET_EXAMPLE + """
+def bad : ScPolynomialTarget Nat scAdd scMul oneN twoN linearGoal :=
+  pair
+    ((xs : List Nat) -> ScPolynomialWitness Nat scAdd scMul oneN
+      (fun x => linearGoal (cons Nat x xs)))
+    ((r : Nat) -> ScPolynomialTarget Nat scAdd scMul oneN oneN
+      (scRestrict Nat linearGoal r))
+    (fun xs => scPolynomialWitness Nat scAdd scMul oneN
+      (fun x => linearGoal (cons Nat x xs)) polyLinear
+      (fun x => refl Nat (scPolynomialEval Nat scAdd scMul oneN polyLinear x))) scUnit
+""", "mismatch"),
+    ("witness-wrong-function", TARGET_EXAMPLE + """
+def bad : ScPolynomialWitness Nat scAdd scMul zero (fun x => zero) :=
+  scPolynomialWitness Nat scAdd scMul zero (fun x => zero)
+    (pair Nat ScUnit oneN scUnit) (fun x => refl Nat oneN)
+""", "mismatch"),
+    ("marginal-missing-target", TARGET_EXAMPLE + """
+def bad : ScPolynomialWitness Nat scAdd scMul oneN
+    (scMarginal Nat scAdd zero oneN oneN linearGoal) :=
+  scPolynomialMarginal Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN oneN linearGoal scUnit
+""", "mismatch"),
+    ("polynomial-trace-missing-message", TARGET_EXAMPLE + """
+def bad : ScPolynomialTrace Nat scAdd scMul oneN
+    (scStep Nat (fun x => x) zero (scDone Nat)) :=
+  pair (ScPolynomialWitness Nat scAdd scMul oneN (fun x => x)) ScUnit scUnit scUnit
+""", "mismatch"),
+    ("polynomial-trace-missing-tail", TARGET_EXAMPLE + """
+def bad : ScPolynomialTrace Nat scAdd scMul oneN
+    (scHonestTrace Nat scAdd zero oneN challengesN linearGoal) :=
+  pair
+    (ScPolynomialWitness Nat scAdd scMul oneN
+      (scMarginal Nat scAdd zero oneN oneN linearGoal))
+    (ScPolynomialTrace Nat scAdd scMul oneN
+      (scHonestTrace Nat scAdd zero oneN (cons Nat oneN (nil Nat))
+        (scRestrict Nat linearGoal twoN))) linearMarginal scUnit
+""", "mismatch"),
+
     ("polynomial-missing-distribution", """
 def missingLaw : (0 F : Type 0) ->
     (plus : F -> F -> F) -> (times : F -> F -> F) ->

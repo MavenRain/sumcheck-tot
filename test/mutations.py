@@ -9,6 +9,117 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scWitnessEvaluation-trivialized", """def scWitnessEvaluation : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) ->
+    (f : F -> F) -> (w : ScPolynomialWitness F plus times d f) -> (x : F) ->
+    Eq F (scPolynomialEval F plus times d
+      (scWitnessPolynomial F plus times d f w) x) (f x) :=
+  fun F plus times d f w => match w as v return (x : F) ->
+      Eq F (scPolynomialEval F plus times d
+        (scWitnessPolynomial F plus times d f v) x) (f x) with
+  | scPolynomialWitness p equal => equal
+  end""",
+     """def scWitnessEvaluation : ScUnit := scUnit""", 1),
+    ("scPolynomialTargetRestrict-trivialized", """def scPolynomialTargetRestrict : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> F) -> ScPolynomialTarget F plus times d (succ n) g ->
+    (r : F) -> ScPolynomialTarget F plus times d n (scRestrict F g r) :=
+  fun F plus times d n g target => match target with
+  | pair slices children => children
+  end""",
+     """def scPolynomialTargetRestrict : ScUnit := scUnit""", 1),
+    ("scSumCong-trivialized", """def rec scSumCong : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (g : List F -> F) -> (h : List F -> F) ->
+    ((xs : List F) -> Eq F (g xs) (h xs)) ->
+    Eq F (scSum F plus lo hi n g) (scSum F plus lo hi n h) :=
+  fun F plus lo hi n => match n as k return
+      (g : List F -> F) -> (h : List F -> F) ->
+      ((xs : List F) -> Eq F (g xs) (h xs)) ->
+      Eq F (scSum F plus lo hi k g) (scSum F plus lo hi k h) with
+  | zero => fun g h equal => equal (nil F)
+  | succ k => fun g h equal => scPolynomialCong2 F plus
+      (scSum F plus lo hi k (scRestrict F g lo))
+      (scSum F plus lo hi k (scRestrict F h lo))
+      (scSum F plus lo hi k (scRestrict F g hi))
+      (scSum F plus lo hi k (scRestrict F h hi))
+      (scSumCong F plus lo hi k (scRestrict F g lo) (scRestrict F h lo)
+        (fun xs => equal (cons F lo xs)))
+      (scSumCong F plus lo hi k (scRestrict F g hi) (scRestrict F h hi)
+        (fun xs => equal (cons F hi xs)))
+  end""",
+     """def scSumCong : ScUnit := scUnit""", 1),
+    ("scPolynomialMarginal-trivialized", """def scPolynomialMarginal : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) -> (g : List F -> F) ->
+    ScPolynomialTarget F plus times d (succ n) g ->
+    ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g) :=
+  fun F plus times distribute shuffle lo hi d n g target => match target with
+  | pair slices children => scPolynomialWitness F plus times d
+      (scMarginal F plus lo hi n g)
+      (scPolynomialSum F plus lo hi d n
+        (fun xs => scWitnessPolynomial F plus times d
+          (fun x => g (cons F x xs)) (slices xs)))
+      (fun x => scEqTrans F
+        (scPolynomialEval F plus times d (scPolynomialSum F plus lo hi d n
+          (fun xs => scWitnessPolynomial F plus times d
+            (fun r => g (cons F r xs)) (slices xs))) x)
+        (scSum F plus lo hi n (fun xs => scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d
+            (fun r => g (cons F r xs)) (slices xs)) x))
+        (scMarginal F plus lo hi n g x)
+        (scPolynomialEvalSum F plus times distribute shuffle lo hi d n
+          (fun xs => scWitnessPolynomial F plus times d
+            (fun r => g (cons F r xs)) (slices xs)) x)
+        (scSumCong F plus lo hi n
+          (fun xs => scPolynomialEval F plus times d
+            (scWitnessPolynomial F plus times d
+              (fun r => g (cons F r xs)) (slices xs)) x)
+          (scRestrict F g x)
+          (fun xs => scWitnessEvaluation F plus times d
+            (fun r => g (cons F r xs)) (slices xs) x)))
+  end""",
+     """def scPolynomialMarginal : ScUnit := scUnit""", 1),
+    ("scHonestTracePolynomial-trivialized", """def rec scHonestTracePolynomial : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (challenges : List F) ->
+    (g : List F -> F) -> ScPolynomialTarget F plus times d (scLength F challenges) g ->
+    ScPolynomialTrace F plus times d (scHonestTrace F plus lo hi challenges g) :=
+  fun F plus times distribute shuffle lo hi d challenges => match challenges as cs return
+      (g : List F -> F) -> ScPolynomialTarget F plus times d (scLength F cs) g ->
+      ScPolynomialTrace F plus times d (scHonestTrace F plus lo hi cs g) with
+  | nil => fun g target => scUnit
+  | cons r rest => fun g target => pair
+      (ScPolynomialWitness F plus times d
+        (scMarginal F plus lo hi (scLength F rest) g))
+      (ScPolynomialTrace F plus times d
+        (scHonestTrace F plus lo hi rest (scRestrict F g r)))
+      (scPolynomialMarginal F plus times distribute shuffle lo hi d
+        (scLength F rest) g target)
+      (scHonestTracePolynomial F plus times distribute shuffle lo hi d rest
+        (scRestrict F g r)
+        (scPolynomialTargetRestrict F plus times d (scLength F rest) g target r))
+  end""",
+     """def scHonestTracePolynomial : ScUnit := scUnit""", 1),
+    ("target-wrong-restriction", """((r : F) -> ScPolynomialTarget F plus times d k (scRestrict F g r))""",
+     """((r : F) -> ScPolynomialTarget F plus times d k g)""", 1),
+    ("trace-drops-message", """(ScPolynomialWitness F plus times d message)
+      (ScPolynomialTrace""",
+     """ScUnit
+      (ScPolynomialTrace""", 1),
+    ("trace-drops-tail", """(ScPolynomialTrace F plus times d tail)""",
+     """ScUnit""", 1),
+    ("polynomial-sum-drops-high-branch", """| succ k => scPolynomialAdd F plus d
+      (scPolynomialSum F plus lo hi d k (fun xs => g (cons F lo xs)))
+      (scPolynomialSum F plus lo hi d k (fun xs => g (cons F hi xs)))""",
+     """| succ k => scPolynomialSum F plus lo hi d k (fun xs => g (cons F lo xs))""", 1),
     ("scPolynomialEvalAdd-trivialized", """def rec scPolynomialEvalAdd : (0 F : Type 0) ->
     (plus : F -> F -> F) -> (times : F -> F -> F) ->
     (distribute : (x : F) -> (a : F) -> (b : F) ->
@@ -1628,7 +1739,13 @@ MUTATIONS = [
 ]
 
 # Removing a refutation function first fails when an existing proof applies it.
-MUTATION_DIAGNOSTICS = {"unique-drops-head-obligation": "not a function type: scunit"}
+MUTATION_DIAGNOSTICS = {
+    "unique-drops-head-obligation": "not a function type: scunit",
+    "scWitnessEvaluation-trivialized": "not a function type: scunit",
+    "scPolynomialTargetRestrict-trivialized": "not a function type: scunit",
+    "scSumCong-trivialized": "not a function type: scunit",
+    "scPolynomialMarginal-trivialized": "not a function type: scunit",
+}
 
 
 def main():
