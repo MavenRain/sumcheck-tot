@@ -11,7 +11,7 @@ TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
-                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot", "CountingAlgebra.tot"))
+                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot", "CountingAlgebra.tot", "FiberCounting.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -217,8 +217,129 @@ def emptyUnionBound : ScLe zero zero :=
     (fun x => scYes ScUnit scUnit) (fun x => scYes ScUnit scUnit) (nil ScBit)
 """
 
+FIBER_CHECKS = """
+def scSumOverCongAt : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    ((x : A) -> Eq Nat (f x) (g x)) -> (xs : List A) ->
+    Eq Nat (scSumOver A f xs) (scSumOver A g xs) :=
+  fun A f g equal xs => scSumOverCong A f g equal xs
+
+def scSumOverBoundAt : (0 A : Type 0) -> (weight : A -> Nat) -> (d : Nat) ->
+    ((x : A) -> ScLe (weight x) d) -> (xs : List A) ->
+    ScLe (scSumOver A weight xs) (scMul (scLength A xs) d) :=
+  fun A weight d bounded xs => scSumOverBound A weight d bounded xs
+
+def scCountExpandAt : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq Nat (scCount B P decide (scExpand A B block xs))
+      (scSumOver A (fun x => scCount B P decide (block x)) xs) :=
+  fun A B block P decide xs => scCountExpand A B block P decide xs
+
+def scCountExpandBoundAt : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (d : Nat) ->
+    ((x : A) -> ScLe (scCount B P decide (block x)) d) -> (xs : List A) ->
+    ScLe (scCount B P decide (scExpand A B block xs)) (scMul (scLength A xs) d) :=
+  fun A B block P decide d bounded xs => scCountExpandBound A B block P decide d bounded xs
+
+def scCountProductAt : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (xs : List A) -> (ys : List B) ->
+    Eq Nat (scCount (Pair A B) P decide (scProduct A B xs ys))
+      (scSumOver A (fun x => scCount B (fun y => P (pair A B x y))
+        (fun y => decide (pair A B x y)) ys) xs) :=
+  fun A B P decide xs ys => scCountProduct A B P decide xs ys
+
+def scFiniteProductFiberBoundAt : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (fa : ScFinite A) -> (fb : ScFinite B) -> (d : Nat) ->
+    ((x : A) -> ScLe (scFiniteCount B (fun y => P (pair A B x y))
+      (fun y => decide (pair A B x y)) fb) d) ->
+    ScLe (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb))
+      (scMul (scCardinality A fa) d) :=
+  fun A B P decide fa fb d bounded => scFiniteProductFiberBound A B P decide fa fb d bounded
+"""
+
+FIBER_EXAMPLES = PRODUCT_EXAMPLE + """
+reducible def fiberBlock : ScBit -> List ScBit := fun x => match x with
+  | scLow => nil ScBit
+  | scHigh => cons ScBit scHigh (cons ScBit scHigh (cons ScBit scLow (nil ScBit)))
+  end
+reducible def fiberHigh : ScBit -> Type 0 := fun x => Eq ScBit x scHigh
+reducible def fiberDec : (x : ScBit) -> ScDec (fiberHigh x) :=
+  fun x => scBitDecEq x scHigh
+reducible def fiberRepeated : List ScBit :=
+  cons ScBit scHigh (cons ScBit scLow (cons ScBit scHigh (nil ScBit)))
+def fiberExact : Eq Nat (scCount ScBit fiberHigh fiberDec
+    (scExpand ScBit ScBit fiberBlock fiberRepeated)) fourN := refl Nat fourN
+def fiberSumExact : Eq Nat (scSumOver ScBit
+    (fun x => scCount ScBit fiberHigh fiberDec (fiberBlock x)) fiberRepeated) fourN :=
+  scEqTrans Nat
+    (scSumOver ScBit (fun x => scCount ScBit fiberHigh fiberDec (fiberBlock x))
+      fiberRepeated) fourN fourN
+    (scEqSym Nat fourN fourN
+      (scCountExpand ScBit ScBit fiberBlock fiberHigh fiberDec fiberRepeated))
+    (refl Nat fourN)
+def fiberBlockBound : (x : ScBit) ->
+    ScLe (scCount ScBit fiberHigh fiberDec (fiberBlock x)) twoN :=
+  fun x => match x as y return
+      ScLe (scCount ScBit fiberHigh fiberDec (fiberBlock y)) twoN with
+  | scLow => scLeZero twoN
+  | scHigh => scLeRefl twoN
+  end
+def fiberRepeatedBound : ScLe fourN (scMul (succ twoN) twoN) :=
+  scCountExpandBound ScBit ScBit fiberBlock fiberHigh fiberDec twoN
+    fiberBlockBound fiberRepeated
+def fiberEmptyBound : ScLe zero zero :=
+  scCountExpandBound ScBit ScBit fiberBlock fiberHigh fiberDec twoN
+    fiberBlockBound (nil ScBit)
+reducible def fiberPairHigh : Pair ScBit ScBit -> Type 0 :=
+  fun p => fiberHigh (scSecond ScBit ScBit p)
+reducible def fiberPairDec : (p : Pair ScBit ScBit) -> ScDec (fiberPairHigh p) :=
+  fun p => fiberDec (scSecond ScBit ScBit p)
+def fiberProductSharp : ScLe twoN twoN :=
+  scFiniteProductFiberBound ScBit ScBit fiberPairHigh fiberPairDec
+    scBitFinite scBitFinite oneN (fun x => scLeRefl oneN)
+def fiberProductExact : Eq Nat
+    (scCount (Pair ScBit ScBit) fiberPairHigh fiberPairDec
+      (scProduct ScBit ScBit scBits scBits)) twoN :=
+  scCountProduct ScBit ScBit fiberPairHigh fiberPairDec scBits scBits
+def fiberEmptyRight : ScLe zero zero :=
+  scFiniteProductFiberBound ScBit ScEmpty (fun p => ScUnit)
+    (fun p => scYes ScUnit scUnit) scBitFinite emptyProductFactor zero
+    (fun x => scLeZero zero)
+def fiberEmptyLeft : ScLe zero zero :=
+  scFiniteProductFiberBound ScEmpty ScBit (fun p => ScUnit)
+    (fun p => scYes ScUnit scUnit) emptyProductFactor scBitFinite zero
+    (fun x => match x with end)
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ('fiber-counting', FIBER_CHECKS, None),
+    ('fiber-examples', FIBER_EXAMPLES, None),
+    ('fiber-bound-missing-hypothesis', """
+def badFiber : (0 A : Type 0) -> (weight : A -> Nat) -> (d : Nat) ->
+    (xs : List A) -> ScLe (scSumOver A weight xs) (scMul (scLength A xs) d) :=
+  fun A weight d xs => scSumOverBound A weight d (fun x => scLeRefl d) xs
+""", "mismatch"),
+    ('fiber-bound-omits-block-count', """
+def badFiber : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (d : Nat) ->
+    ((x : A) -> ScLe (scCount B P decide (block x)) d) -> (xs : List A) ->
+    ScLe (scCount B P decide (scExpand A B block xs)) d :=
+  fun A B block P decide d bounded xs =>
+    scCountExpandBound A B block P decide d bounded xs
+""", "mismatch"),
+    ('fiber-product-wrong-coordinate', """
+def badFiber : (0 A : Type 0) -> (0 P : Pair A A -> Type 0) ->
+    (decide : (p : Pair A A) -> ScDec (P p)) -> (xs : List A) -> (ys : List A) ->
+    Eq Nat (scCount (Pair A A) P decide (scProduct A A xs ys))
+      (scSumOver A (fun x => scCount A (fun y => P (pair A A y x))
+        (fun y => decide (pair A A y x)) ys) xs) :=
+  fun A P decide xs ys => scCountProduct A A P decide xs ys
+""", "mismatch"),
     ('counting-algebra', COUNTING_ALGEBRA_CHECKS, None),
     ('counting-algebra-examples', COUNTING_ALGEBRA_EXAMPLES, None),
     ("count-mono-reversed", """def badMono : (0 A : Type 0) -> (0 P : A -> Type 0) ->

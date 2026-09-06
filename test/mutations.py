@@ -9,6 +9,139 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scSumOverCong-trivialized", """def rec scSumOverCong : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    ((x : A) -> Eq Nat (f x) (g x)) -> (xs : List A) ->
+    Eq Nat (scSumOver A f xs) (scSumOver A g xs) :=
+  fun A f g equal xs => match xs as ys return
+      Eq Nat (scSumOver A f ys) (scSumOver A g ys) with
+  | nil => refl Nat zero
+  | cons x rest => scEqTrans Nat
+      (scAdd (f x) (scSumOver A f rest)) (scAdd (g x) (scSumOver A f rest))
+      (scAdd (g x) (scSumOver A g rest))
+      (scCong Nat Nat (fun n => scAdd n (scSumOver A f rest)) (f x) (g x) (equal x))
+      (scCong Nat Nat (scAdd (g x)) (scSumOver A f rest) (scSumOver A g rest)
+        (scSumOverCong A f g equal rest))
+  end""",
+     """def scSumOverCong : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    ((x : A) -> Eq Nat (f x) (g x)) -> (xs : List A) ->
+    Eq Nat (scSumOver A f xs) (scSumOver A f xs) :=
+  fun A f g equal xs => refl Nat (scSumOver A f xs)""", 1),
+    ("scSumOverBound-trivialized", """def rec scSumOverBound : (0 A : Type 0) -> (weight : A -> Nat) -> (d : Nat) ->
+    ((x : A) -> ScLe (weight x) d) -> (xs : List A) ->
+    ScLe (scSumOver A weight xs) (scMul (scLength A xs) d) :=
+  fun A weight d bounded xs => match xs as ys return
+      ScLe (scSumOver A weight ys) (scMul (scLength A ys) d) with
+  | nil => scLeZero zero
+  | cons x rest => scAddLe (weight x) d (bounded x)
+      (scSumOver A weight rest) (scMul (scLength A rest) d)
+      (scSumOverBound A weight d bounded rest)
+  end""",
+     """def scSumOverBound : (0 A : Type 0) -> (weight : A -> Nat) -> (d : Nat) ->
+    ((x : A) -> ScLe (weight x) d) -> (xs : List A) ->
+    ScLe (scSumOver A weight xs) (scSumOver A weight xs) :=
+  fun A weight d bounded xs => scLeRefl (scSumOver A weight xs)""", 1),
+    ("scCountExpand-trivialized", """def rec scCountExpand : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq Nat (scCount B P decide (scExpand A B block xs))
+      (scSumOver A (fun x => scCount B P decide (block x)) xs) :=
+  fun A B block P decide xs => match xs as ys return
+      Eq Nat (scCount B P decide (scExpand A B block ys))
+        (scSumOver A (fun x => scCount B P decide (block x)) ys) with
+  | nil => refl Nat zero
+  | cons x rest => scEqTrans Nat
+      (scCount B P decide (scExpand A B block (cons A x rest)))
+      (scAdd (scCount B P decide (block x))
+        (scCount B P decide (scExpand A B block rest)))
+      (scSumOver A (fun y => scCount B P decide (block y)) (cons A x rest))
+      (scCountAppend B P decide (block x) (scExpand A B block rest))
+      (scCong Nat Nat (scAdd (scCount B P decide (block x)))
+        (scCount B P decide (scExpand A B block rest))
+        (scSumOver A (fun y => scCount B P decide (block y)) rest)
+        (scCountExpand A B block P decide rest))
+  end""",
+     """def scCountExpand : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq Nat (scCount B P decide (scExpand A B block xs))
+      (scCount B P decide (scExpand A B block xs)) :=
+  fun A B block P decide xs => refl Nat (scCount B P decide (scExpand A B block xs))""", 1),
+    ("scCountExpandBound-trivialized", """def scCountExpandBound : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (d : Nat) ->
+    ((x : A) -> ScLe (scCount B P decide (block x)) d) -> (xs : List A) ->
+    ScLe (scCount B P decide (scExpand A B block xs)) (scMul (scLength A xs) d) :=
+  fun A B block P decide d bounded xs => scTransport Nat
+    (scSumOver A (fun x => scCount B P decide (block x)) xs)
+    (scCount B P decide (scExpand A B block xs))
+    (fun total => ScLe total (scMul (scLength A xs) d))
+    (scEqSym Nat (scCount B P decide (scExpand A B block xs))
+      (scSumOver A (fun x => scCount B P decide (block x)) xs)
+      (scCountExpand A B block P decide xs))
+    (scSumOverBound A (fun x => scCount B P decide (block x)) d bounded xs)""",
+     """def scCountExpandBound : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (0 P : B -> Type 0) ->
+    (decide : (y : B) -> ScDec (P y)) -> (d : Nat) ->
+    ((x : A) -> ScLe (scCount B P decide (block x)) d) -> (xs : List A) ->
+    ScLe (scCount B P decide (scExpand A B block xs))
+      (scCount B P decide (scExpand A B block xs)) :=
+  fun A B block P decide d bounded xs => scLeRefl (scCount B P decide (scExpand A B block xs))""", 1),
+    ("scCountProduct-trivialized", """def scCountProduct : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (xs : List A) -> (ys : List B) ->
+    Eq Nat (scCount (Pair A B) P decide (scProduct A B xs ys))
+      (scSumOver A (fun x => scCount B (fun y => P (pair A B x y))
+        (fun y => decide (pair A B x y)) ys) xs) :=
+  fun A B P decide xs ys => scEqTrans Nat
+    (scCount (Pair A B) P decide (scProduct A B xs ys))
+    (scSumOver A (fun x => scCount (Pair A B) P decide
+      (scMap B (Pair A B) (fun y => pair A B x y) ys)) xs)
+    (scSumOver A (fun x => scCount B (fun y => P (pair A B x y))
+      (fun y => decide (pair A B x y)) ys) xs)
+    (scCountExpand A (Pair A B)
+      (fun x => scMap B (Pair A B) (fun y => pair A B x y) ys) P decide xs)
+    (scSumOverCong A
+      (fun x => scCount (Pair A B) P decide
+        (scMap B (Pair A B) (fun y => pair A B x y) ys))
+      (fun x => scCount B (fun y => P (pair A B x y))
+        (fun y => decide (pair A B x y)) ys)
+      (fun x => scEqSym Nat
+        (scCount B (fun y => P (pair A B x y)) (fun y => decide (pair A B x y)) ys)
+        (scCount (Pair A B) P decide (scMap B (Pair A B) (fun y => pair A B x y) ys))
+        (scCountMap B (Pair A B) (fun y => pair A B x y) P decide ys)) xs)""",
+     """def scCountProduct : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (xs : List A) -> (ys : List B) ->
+    Eq Nat (scCount (Pair A B) P decide (scProduct A B xs ys))
+      (scCount (Pair A B) P decide (scProduct A B xs ys)) :=
+  fun A B P decide xs ys => refl Nat (scCount (Pair A B) P decide (scProduct A B xs ys))""", 1),
+    ("scFiniteProductFiberBound-trivialized", """def scFiniteProductFiberBound : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (fa : ScFinite A) -> (fb : ScFinite B) -> (d : Nat) ->
+    ((x : A) -> ScLe (scFiniteCount B (fun y => P (pair A B x y))
+      (fun y => decide (pair A B x y)) fb) d) ->
+    ScLe (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb))
+      (scMul (scCardinality A fa) d) :=
+  fun A B P decide fa fb d bounded => scTransport Nat
+    (scSumOver A (fun x => scFiniteCount B (fun y => P (pair A B x y))
+      (fun y => decide (pair A B x y)) fb) (scElements A fa))
+    (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb))
+    (fun total => ScLe total (scMul (scCardinality A fa) d))
+    (scEqSym Nat (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb))
+      (scSumOver A (fun x => scFiniteCount B (fun y => P (pair A B x y))
+        (fun y => decide (pair A B x y)) fb) (scElements A fa))
+      (scCountProduct A B P decide (scElements A fa) (scElements B fb)))
+    (scSumOverBound A (fun x => scFiniteCount B (fun y => P (pair A B x y))
+      (fun y => decide (pair A B x y)) fb) d bounded (scElements A fa))""",
+     """def scFiniteProductFiberBound : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (fa : ScFinite A) -> (fb : ScFinite B) -> (d : Nat) ->
+    ((x : A) -> ScLe (scFiniteCount B (fun y => P (pair A B x y))
+      (fun y => decide (pair A B x y)) fb) d) ->
+    ScLe (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb))
+      (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb)) :=
+  fun A B P decide fa fb d bounded => scLeRefl (scFiniteCount (Pair A B) P decide (scProductFinite A B fa fb))""", 1),
+
     ("scCountMono-trivialized", """def rec scCountMono : (0 A : Type 0) -> (0 P : A -> Type 0) ->
     (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
     (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (Q x)) ->

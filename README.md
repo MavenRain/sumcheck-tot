@@ -20,8 +20,10 @@ cardinality `|F|^n`. Their list conversion preserves length and is injective;
 every list converts to a vector at its own length and back unchanged.
 Converting the full vector enumeration gives exactly the challenge-word list,
 in the same order. Predicate counts agree under this conversion.
-Counts now respect predicate implication and equivalence, are independent of
+Counts respect predicate implication and equivalence, are independent of
 the decision procedure, add over appended lists, and satisfy a binary union bound.
+Expansion and product counts split into sums of block counts. A uniform bound
+`d` on each fiber of a finite product gives a total bound `|A| * d`.
 
 ## Check
 
@@ -132,6 +134,20 @@ compiler rebuild is required when a built checker exists.
   multiplicity. Specializing the list to `scElements A finite` gives the
   corresponding finite-carrier results for a fixed enumeration.
 
+- `scSumOver` sums natural weights over a list, retaining multiplicity.
+  `scSumOverCong` respects pointwise equality, and `scSumOverBound` bounds
+  the total by `length xs * d` when every weight is at most `d`.
+- `scCountExpand` expresses the count over concatenated blocks as the sum
+  of their counts. `scCountExpandBound` gives `length xs * d` when every
+  block count is at most `d`. Blocks may overlap or have different lengths.
+- `scCountProduct` expresses a product predicate count as the sum, over
+  first coordinates, of counts with that coordinate fixed.
+- `scFiniteProductFiberBound` bounds the packaged product count by
+  `scCardinality A fa * d`, given a count bound `d` for each first-coordinate
+  fiber over `fb`. Empty carriers are allowed. This is a conditional counting
+  lemma: callers must supply the fiber bound; it is not a root bound or
+  a sumcheck soundness result.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -165,13 +181,20 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all forty-four checks passed with checker SHA-256
+On 2026-09-06, all forty-nine checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The forty-four checks:
+The forty-nine checks:
+
+- All six public fiber-counting theorems check at abstract arguments.
+- Concrete fiber checks cover varying block lengths, repeated entries and
+  labels, empty expansion, a sharp finite-product bound, and empty factors.
+- A uniform sum bound without the pointwise hypothesis is rejected.
+- An expansion bound omitting the number of blocks is rejected.
+- A product count with swapped predicate coordinates is rejected.
 
 - All generic proofs check without a prelude or axioms.
 - All five public counting-algebra theorems check at abstract arguments.
@@ -248,10 +271,15 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check thirty-four deliberate mutations in memory. All thirty-four were caught.
+suite and check forty deliberate mutations in memory. All forty were caught.
+The mutation battery also includes six consistent statement trivializations
+for the fiber-counting theorems. Their generic consumers or abstract-argument
+checks reject them.
+
 Five counting-algebra mutations consistently trivialize the theorem statements
-and replace their proofs. Abstract-argument checks catch four; the equivalence
-mutation is caught by its decision-independence consumer.
+and replace their proofs. Abstract-argument checks catch monotonicity, decision
+independence, and the union bound; generic consumers catch equivalence and
+append additivity.
 Three enumeration mutations consistently trivialize the enumeration, count-map, and
 vector-word-count statements. Their consumers catch the first two; the
 abstract count-equality regression catches the third. The existing controls cover:
@@ -290,7 +318,8 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 1. Establish enumeration independence and prove the remaining arithmetic
    needed for soundness. Predicate monotonicity, decision independence,
    append additivity, and the binary union bound are now proved; independence
-   from the finite enumeration and adaptive counting remain open.
+   from the finite enumeration remains open. Product fiber decomposition and
+   uniform fiber bounds are proved; adaptive strategy counting remains open.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -307,7 +336,7 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
-`src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`.
+`src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`.
 
 ## License
 
