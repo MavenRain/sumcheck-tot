@@ -13,7 +13,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
-                  "Recurrence.tot"))
+                  "Recurrence.tot", "Strategies.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -424,8 +424,103 @@ def commuteConcrete : Eq Nat (scMul twoN (succ twoN)) (scMul (succ twoN) twoN) :
   scMulComm twoN (succ twoN)
 """
 
+STRATEGY_CHECKS = """
+def scRunStrategyLengthAt : (0 F : Type 0) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq Nat (scTraceLength F (scRunStrategy F n strategy v)) n :=
+  fun F n strategy v => scRunStrategyLength F n strategy v
+
+def scRunStrategyChallengesAt : (0 F : Type 0) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq (List F) (scTraceChallenges F (scRunStrategy F n strategy v))
+      (scVectorList F n v) :=
+  fun F n strategy v => scRunStrategyChallenges F n strategy v
+
+def scHonestStrategyTraceAt : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (cs : List F) -> (g : List F -> F) ->
+    Eq (ScTrace F)
+      (scRunStrategy F (scLength F cs)
+        (scHonestStrategy F plus lo hi (scLength F cs) g) (scListVector F cs))
+      (scHonestTrace F plus lo hi cs g) :=
+  fun F plus lo hi cs g => scHonestStrategyTrace F plus lo hi cs g
+
+def scHonestStrategyCompletenessAt : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (v : ScVector F n) ->
+    (g : List F -> F) ->
+    scAccept F plus lo hi
+      (scRunStrategy F n (scHonestStrategy F plus lo hi n g) v) g
+      (scSum F plus lo hi n g) :=
+  fun F plus lo hi n v g => scHonestStrategyCompleteness F plus lo hi n v g
+
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("strategies", STRATEGY_CHECKS, None),
+    ("strategy-examples", EXAMPLE + """
+reducible def adaptiveN : ScStrategy Nat twoN :=
+  pair (Nat -> Nat) (Nat -> ScStrategy Nat oneN) (fun x => zero)
+    (fun r => pair (Nat -> Nat) (Nat -> ScStrategy Nat zero)
+      (fun x => r) (fun x => scUnit))
+reducible def vectorN : ScVector Nat twoN := scListVector Nat challengesN
+reducible def alternateN : ScVector Nat twoN :=
+  pair Nat (ScVector Nat oneN) oneN (pair Nat ScUnit twoN scUnit)
+def adaptiveFirst : Eq (ScTrace Nat) (scRunStrategy Nat twoN adaptiveN vectorN)
+    (scStep Nat (fun x => zero) twoN
+      (scStep Nat (fun x => twoN) oneN (scDone Nat))) :=
+  refl (ScTrace Nat) (scStep Nat (fun x => zero) twoN
+    (scStep Nat (fun x => twoN) oneN (scDone Nat)))
+def adaptiveAlternate : Eq (ScTrace Nat) (scRunStrategy Nat twoN adaptiveN alternateN)
+    (scStep Nat (fun x => zero) oneN
+      (scStep Nat (fun x => oneN) twoN (scDone Nat))) :=
+  refl (ScTrace Nat) (scStep Nat (fun x => zero) oneN
+    (scStep Nat (fun x => oneN) twoN (scDone Nat)))
+def strategyLength : Eq Nat (scTraceLength Nat
+    (scRunStrategy Nat twoN adaptiveN vectorN)) twoN :=
+  scRunStrategyLength Nat twoN adaptiveN vectorN
+def strategyChallenges : Eq (List Nat) (scTraceChallenges Nat
+    (scRunStrategy Nat twoN adaptiveN vectorN)) challengesN :=
+  scRunStrategyChallenges Nat twoN adaptiveN vectorN
+def honestStrategyAgrees : Eq (ScTrace Nat)
+    (scRunStrategy Nat twoN (scHonestStrategy Nat plusN zero oneN twoN sumInputs)
+      vectorN) honestN :=
+  scHonestStrategyTrace Nat plusN zero oneN challengesN sumInputs
+def honestStrategyAccepts : scAccept Nat plusN zero oneN
+    (scRunStrategy Nat twoN (scHonestStrategy Nat plusN zero oneN twoN sumInputs)
+      vectorN) sumInputs fourN :=
+  scHonestStrategyCompleteness Nat plusN zero oneN twoN vectorN sumInputs
+def noRounds : Eq (ScTrace ScEmpty)
+    (scRunStrategy ScEmpty zero scUnit scUnit) (scDone ScEmpty) :=
+  refl (ScTrace ScEmpty) (scDone ScEmpty)
+def zeroRoundAccepts : scAccept Nat plusN zero oneN
+    (scRunStrategy Nat zero (scHonestStrategy Nat plusN zero oneN zero sumInputs)
+      scUnit) sumInputs zero :=
+  scHonestStrategyCompleteness Nat plusN zero oneN zero scUnit sumInputs
+""", None),
+    ("strategy-wrong-rounds", """
+def wrongStrategyLength : (0 F : Type 0) -> (n : Nat) ->
+    (s : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq Nat (scTraceLength F (scRunStrategy F n s v)) (succ n) :=
+  fun F n s v => scRunStrategyLength F n s v
+""", "mismatch"),
+    ("strategy-wrong-challenges", """
+def wrongStrategyChallenges : (0 F : Type 0) -> (n : Nat) ->
+    (s : ScStrategy F n) -> (v : ScVector F n) -> (w : ScVector F n) ->
+    Eq (List F) (scTraceChallenges F (scRunStrategy F n s v))
+      (scVectorList F n w) :=
+  fun F n s v w => scRunStrategyChallenges F n s v
+""", "mismatch"),
+    ("strategy-wrong-claim", """
+def wrongStrategyClaim : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (v : ScVector F n) ->
+    (g : List F -> F) -> (claim : F) -> scAccept F plus lo hi
+      (scRunStrategy F n (scHonestStrategy F plus lo hi n g) v) g claim :=
+  fun F plus lo hi n v g claim => scHonestStrategyCompleteness F plus lo hi n v g
+""", "mismatch"),
+    ("strategy-early-stop", """
+def earlyStop : (0 F : Type 0) -> ScStrategy F (succ zero) :=
+  fun F => scUnit
+""", "mismatch"),
     ("recurrence", RECURRENCE_CHECKS, None),
     ("recurrence-examples", RECURRENCE_EXAMPLES, None),
     ("recurrence-missing-initial", """

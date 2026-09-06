@@ -30,6 +30,10 @@ powers satisfy `q^(n+m) = q^n * q^m`, including zero bases and exponents.
 The arithmetic recurrence `B(0)=0`, `B(n+1)=d*q^n+q*B(n)` has the checked
 closed form `q*B(n)=n*d*q^n`. Any natural-valued sequence satisfying its
 initial and step inequalities is bounded by this budget.
+Fixed-round adaptive strategies choose each message before the challenge
+selects a continuation. Running a strategy preserves the challenge order and
+produces exactly the indexed number of rounds. Honest strategies recover the
+original honest transcripts and satisfy algebraic acceptance.
 
 ## Check
 
@@ -179,6 +183,22 @@ compiler rebuild is required when a built checker exists.
   hypotheses. These are conditional arithmetic theorems in `Recurrence.tot`.
   No theorem yet shows that accepting transcript counts satisfy the recurrence.
 
+- `ScStrategy F n` is a depth-`n` tree: zero rounds contain unit, and each
+  successor node contains a message `F -> F` and a continuation
+  `F -> ScStrategy F k`. For a fixed strategy, the current challenge selects
+  only the continuation; the message is already fixed at that node. Earlier
+  challenges may select different later messages. This models deterministic
+  strategies; there is no prover randomness model yet.
+- `scRunStrategy` consumes a strategy and `ScVector F n`, producing a
+  transcript. `scRunStrategyLength` proves its length is exactly `n`;
+  `scRunStrategyChallenges` proves its challenges are exactly the vector's
+  list conversion, in order.
+- `scHonestStrategy` builds the marginal-message tree without receiving a
+  challenge vector. `scHonestStrategyTrace` proves that running it on
+  `scListVector cs` gives `scHonestTrace cs`. `scHonestStrategyCompleteness`
+  proves acceptance at `scSum ... n g` for every length-`n` vector, including
+  zero rounds. These results live in `Strategies.tot` and require no field laws.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -198,9 +218,9 @@ assignments; for an n-round instance only length-n assignments are queried.
 This is **algebraic consistency completeness**, not yet full polynomial
 sumcheck completeness or soundness. Round messages are functions rather
 than bounded-degree polynomials. There is currently no degree check,
-adaptive strategy definition, probability model, or soundness theorem.
-Arbitrary transcripts also do not yet carry an externally enforced round
-count; the honest construction uses exactly the supplied challenges.
+probability model, or soundness theorem. Adaptive strategies enforce the
+round count through their index and the challenge-vector index; bare
+`ScTrace` values and `scAccept` still carry no external round-count check.
 
 The standalone foundation declares `Nat`, `List`, `Pair`, and indexed
 propositional `Eq`. The finite and counting modules add empty and unit types,
@@ -212,20 +232,28 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all sixty-one checks passed with checker SHA-256
+On 2026-09-06, all sixty-seven checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The sixty-one checks:
+The sixty-seven checks:
 
 - All generic proofs check without a prelude or axioms.
+- All four strategy theorems check at abstract arguments.
+- Strategy examples cover two adaptive branches, exact transcript contents,
+  length and challenge order, the honest-transcript bridge, honest acceptance,
+  and zero rounds, including a run over an empty carrier.
+- A strategy length theorem used at the wrong round count is rejected.
+- Challenge preservation used with a different vector is rejected.
+- Honest strategy completeness used at an arbitrary claim is rejected.
+- A positive-round strategy that terminates immediately is rejected.
 - All nine public recurrence and supporting arithmetic theorems check at
   abstract arguments.
 - Concrete recurrence checks cover zero rounds, one through three rounds,
   zero and unit carriers, zero degree, both closed forms, a sharp recurrence
-  bound, and a strict bound for the zero sequence.
+  bound, and a slack bound for the zero sequence.
 - A recurrence bound supplied without the initial inequality is rejected.
 - A recurrence bound supplied without the step inequality is rejected.
 - The successor closed form used with the wrong exponent is rejected.
@@ -317,7 +345,12 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check sixty deliberate mutations in memory. All sixty were caught.
+suite and check sixty-seven deliberate mutations in memory. All were caught.
+Four strategy mutations consistently weaken the public theorem statements
+and replace their proofs; the abstract strategy checks reject all four.
+Three runner mutations drop a round, select a continuation using the message
+evaluation instead of the challenge, or record that evaluation as the challenge.
+Generic proofs reject all three.
 Nine recurrence-module mutations replace theorem statements and proofs with
 reflexive versions. Generic consumers reject seven; the abstract checks reject
 the trivialized successor closed form and scaled recurrence bound. Three
@@ -381,8 +414,8 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
    the required degree bound, then extend acceptance and completeness.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
-4. Define adaptive strategies whose messages depend only on past
-   challenges, enforce the input round count, and count accepting challenge
+4. Adaptive strategies and enforced round counts are defined, with honest
+   completeness proved. Add degree constraints and count accepting challenge
    vectors for false claims by induction. Target
    `|F| * acceptingCount <= n * d * |F|^n` for individual degree at most d.
 5. Interpret that count under independent uniform challenges to obtain
@@ -393,7 +426,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
-`src/Arithmetic.tot`, `src/Recurrence.tot`.
+`src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`.
 
 ## License
 

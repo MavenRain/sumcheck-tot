@@ -9,6 +9,110 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scRunStrategyLength-trivialized", """def rec scRunStrategyLength : (0 F : Type 0) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq Nat (scTraceLength F (scRunStrategy F n strategy v)) n :=
+  fun F n => match n as k return (strategy : ScStrategy F k) ->
+      (v : ScVector F k) ->
+      Eq Nat (scTraceLength F (scRunStrategy F k strategy v)) k with
+  | zero => fun strategy v => refl Nat zero
+  | succ k => fun strategy v => match strategy as s return
+      Eq Nat (scTraceLength F (scRunStrategy F (succ k) s v)) (succ k) with
+    | pair message next => match v as w return Eq Nat
+        (scTraceLength F (scRunStrategy F (succ k)
+          (pair (F -> F) (F -> ScStrategy F k) message next) w))
+        (succ k) with
+      | pair r rest => scSuccCong
+          (scTraceLength F (scRunStrategy F k (next r) rest)) k
+          (scRunStrategyLength F k (next r) rest)
+      end
+    end
+  end""",
+     """def scRunStrategyLength : (0 F : Type 0) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq Nat n n :=
+  fun F n strategy v => refl Nat n""", 1),
+    ("scRunStrategyChallenges-trivialized", """def rec scRunStrategyChallenges : (0 F : Type 0) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq (List F) (scTraceChallenges F (scRunStrategy F n strategy v))
+      (scVectorList F n v) :=
+  fun F n => match n as k return (strategy : ScStrategy F k) ->
+      (v : ScVector F k) ->
+      Eq (List F) (scTraceChallenges F (scRunStrategy F k strategy v))
+        (scVectorList F k v) with
+  | zero => fun strategy v => refl (List F) (nil F)
+  | succ k => fun strategy v => match strategy as s return Eq (List F)
+      (scTraceChallenges F (scRunStrategy F (succ k) s v))
+      (scVectorList F (succ k) v) with
+    | pair message next => match v as w return Eq (List F)
+        (scTraceChallenges F (scRunStrategy F (succ k)
+          (pair (F -> F) (F -> ScStrategy F k) message next) w))
+        (scVectorList F (succ k) w) with
+      | pair r rest => scCong (List F) (List F) (fun xs => cons F r xs)
+          (scTraceChallenges F (scRunStrategy F k (next r) rest))
+          (scVectorList F k rest) (scRunStrategyChallenges F k (next r) rest)
+      end
+    end
+  end""",
+     """def scRunStrategyChallenges : (0 F : Type 0) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (v : ScVector F n) ->
+    Eq (List F) (scVectorList F n v) (scVectorList F n v) :=
+  fun F n strategy v => refl (List F) (scVectorList F n v)""", 1),
+    ("scHonestStrategyTrace-trivialized", """def rec scHonestStrategyTrace : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (cs : List F) -> (g : List F -> F) ->
+    Eq (ScTrace F)
+      (scRunStrategy F (scLength F cs)
+        (scHonestStrategy F plus lo hi (scLength F cs) g) (scListVector F cs))
+      (scHonestTrace F plus lo hi cs g) :=
+  fun F plus lo hi cs => match cs as xs return (g : List F -> F) ->
+      Eq (ScTrace F)
+        (scRunStrategy F (scLength F xs)
+          (scHonestStrategy F plus lo hi (scLength F xs) g) (scListVector F xs))
+        (scHonestTrace F plus lo hi xs g) with
+  | nil => fun g => refl (ScTrace F) (scDone F)
+  | cons r rest => fun g => scCong (ScTrace F) (ScTrace F)
+      (fun tail => scStep F (scMarginal F plus lo hi (scLength F rest) g) r tail)
+      (scRunStrategy F (scLength F rest)
+        (scHonestStrategy F plus lo hi (scLength F rest) (scRestrict F g r))
+        (scListVector F rest))
+      (scHonestTrace F plus lo hi rest (scRestrict F g r))
+      (scHonestStrategyTrace F plus lo hi rest (scRestrict F g r))
+  end""",
+     """def scHonestStrategyTrace : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (cs : List F) -> (g : List F -> F) ->
+    Eq (ScTrace F) (scHonestTrace F plus lo hi cs g)
+      (scHonestTrace F plus lo hi cs g) :=
+  fun F plus lo hi cs g => refl (ScTrace F) (scHonestTrace F plus lo hi cs g)""", 1),
+    ("scHonestStrategyCompleteness-trivialized", """def rec scHonestStrategyCompleteness : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (v : ScVector F n) ->
+    (g : List F -> F) ->
+    scAccept F plus lo hi
+      (scRunStrategy F n (scHonestStrategy F plus lo hi n g) v) g
+      (scSum F plus lo hi n g) :=
+  fun F plus lo hi n => match n as k return (v : ScVector F k) ->
+      (g : List F -> F) -> scAccept F plus lo hi
+        (scRunStrategy F k (scHonestStrategy F plus lo hi k g) v) g
+        (scSum F plus lo hi k g) with
+  | zero => fun v g => refl F (g (nil F))
+  | succ k => fun v => match v as w return (g : List F -> F) ->
+      scAccept F plus lo hi
+        (scRunStrategy F (succ k) (scHonestStrategy F plus lo hi (succ k) g) w) g
+        (scSum F plus lo hi (succ k) g) with
+    | pair r rest => fun g => pair _ _ (scOneRoundCompleteness F plus lo hi k g)
+        (scHonestStrategyCompleteness F plus lo hi k rest (scRestrict F g r))
+    end
+  end""",
+     """def scHonestStrategyCompleteness : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (v : ScVector F n) ->
+    (g : List F -> F) ->
+    ScUnit :=
+  fun F plus lo hi n v g => scUnit""", 1),
+    ("strategy-drops-round", """scStep F message r (scRunStrategy F k (next r) rest)""",
+     """scRunStrategy F k (next r) rest""", 1),
+    ("strategy-branches-on-evaluation", """scStep F message r (scRunStrategy F k (next r) rest)""",
+     """scStep F message r (scRunStrategy F k (next (message r)) rest)""", 1),
+    ("strategy-records-evaluation", """scStep F message r (scRunStrategy F k (next r) rest)""",
+     """scStep F message (message r) (scRunStrategy F k (next r) rest)""", 1),
     ("scAddComm-trivialized", """def rec scAddComm : (n : Nat) -> (m : Nat) ->
     Eq Nat (scAdd n m) (scAdd m n) :=
   fun n m => match n as a return Eq Nat (scAdd a m) (scAdd m a) with
