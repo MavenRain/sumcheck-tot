@@ -1,0 +1,9 @@
+-- Standalone logical foundation; no ambient tot prelude or axioms.
+data Nat : Type 0 := | zero : Nat | succ : Nat -> Nat
+data List (0 A : Type 0) : Type 0 :=
+  | nil : List A
+  | cons : A -> List A -> List A
+data Pair (0 A : Type 0) (0 B : Type 0) : Type 0 :=
+  | pair : A -> B -> Pair A B
+data Eq (0 A : Type 0) (0 a : A) : (0 b : A) -> Type 0 :=
+  | refl : Eq A a a

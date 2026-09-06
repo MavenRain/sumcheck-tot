@@ -1,0 +1,73 @@
+-- Algebraic sumcheck over an arbitrary carrier with two distinguished points.
+-- No field laws are needed for these consistency equations.
+reducible def rec scLength : (0 F : Type 0) -> List F -> Nat :=
+  fun F xs => match xs with
+  | nil => zero
+  | cons x rest => succ (scLength F rest)
+  end
+
+reducible def scRestrict : (0 F : Type 0) -> (List F -> F) -> F -> List F -> F :=
+  fun F g r xs => g (cons F r xs)
+
+reducible def rec scSum : (0 F : Type 0) -> (F -> F -> F) -> F -> F ->
+    Nat -> (List F -> F) -> F :=
+  fun F plus lo hi n g => match n with
+  | zero => g (nil F)
+  | succ k => plus
+      (scSum F plus lo hi k (scRestrict F g lo))
+      (scSum F plus lo hi k (scRestrict F g hi))
+  end
+
+reducible def scMarginal : (0 F : Type 0) -> (F -> F -> F) -> F -> F ->
+    Nat -> (List F -> F) -> F -> F :=
+  fun F plus lo hi n g r => scSum F plus lo hi n (scRestrict F g r)
+
+def scOneRoundCompleteness : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (g : List F -> F) ->
+    Eq F (plus (scMarginal F plus lo hi n g lo)
+               (scMarginal F plus lo hi n g hi))
+         (scSum F plus lo hi (succ n) g) :=
+  fun F plus lo hi n g => refl F (scSum F plus lo hi (succ n) g)
+
+-- A transcript records each round function, challenge, and remaining rounds.
+data ScTrace (0 F : Type 0) : Type 0 :=
+  | scDone : ScTrace F
+  | scStep : (F -> F) -> F -> ScTrace F -> ScTrace F
+
+-- This relation checks arbitrary transcripts, not just honest transcripts.
+-- It deliberately has no degree predicate yet: this is algebraic acceptance.
+reducible def rec scAccept : (0 F : Type 0) -> (F -> F -> F) -> F -> F ->
+    ScTrace F -> (List F -> F) -> F -> Type 0 :=
+  fun F plus lo hi trace g claim => match trace with
+  | scDone => Eq F claim (g (nil F))
+  | scStep message r tail => Pair
+      (Eq F (plus (message lo) (message hi)) claim)
+      (scAccept F plus lo hi tail (scRestrict F g r) (message r))
+  end
+
+reducible def rec scHonestTrace : (0 F : Type 0) -> (F -> F -> F) -> F -> F ->
+    List F -> (List F -> F) -> ScTrace F :=
+  fun F plus lo hi challenges g => match challenges with
+  | nil => scDone F
+  | cons r rest => scStep F
+      (scMarginal F plus lo hi (scLength F rest) g) r
+      (scHonestTrace F plus lo hi rest (scRestrict F g r))
+  end
+
+-- Every challenge sequence satisfies every consistency equation, including
+-- the final evaluation. Structural induction is on the challenge list.
+def rec scHonestCompleteness : (0 F : Type 0) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (challenges : List F) -> (g : List F -> F) ->
+    scAccept F plus lo hi (scHonestTrace F plus lo hi challenges g) g
+      (scSum F plus lo hi (scLength F challenges) g) :=
+  fun F plus lo hi challenges g => match challenges as cs return
+      scAccept F plus lo hi (scHonestTrace F plus lo hi cs g) g
+        (scSum F plus lo hi (scLength F cs) g) with
+  | nil => refl F (g (nil F))
+  | cons r rest => pair _ _
+      (scOneRoundCompleteness F plus lo hi (scLength F rest) g)
+      (scHonestCompleteness F plus lo hi rest (scRestrict F g r))
+  end
+
+check scOneRoundCompleteness
+check scHonestCompleteness
