@@ -1,0 +1,117 @@
+-- Exact enumeration conversion, including order and multiplicity.
+def rec scMapAppend : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (xs : List A) -> (ys : List A) ->
+    Eq (List B) (scMap A B f (scAppend A xs ys))
+      (scAppend B (scMap A B f xs) (scMap A B f ys)) :=
+  fun A B f xs ys => match xs as zs return
+      Eq (List B) (scMap A B f (scAppend A zs ys))
+        (scAppend B (scMap A B f zs) (scMap A B f ys)) with
+  | nil => refl (List B) (scMap A B f ys)
+  | cons x rest => scCong (List B) (List B) (fun tail => cons B (f x) tail)
+      (scMap A B f (scAppend A rest ys))
+      (scAppend B (scMap A B f rest) (scMap A B f ys)) (scMapAppend A B f rest ys)
+  end
+
+def rec scMapCompose : (0 A : Type 0) -> (0 B : Type 0) -> (0 C : Type 0) ->
+    (f : A -> B) -> (g : B -> C) -> (xs : List A) ->
+    Eq (List C) (scMap B C g (scMap A B f xs))
+      (scMap A C (fun x => g (f x)) xs) :=
+  fun A B C f g xs => match xs as ys return
+      Eq (List C) (scMap B C g (scMap A B f ys))
+        (scMap A C (fun x => g (f x)) ys) with
+  | nil => refl (List C) (nil C)
+  | cons x rest => scCong (List C) (List C) (fun tail => cons C (g (f x)) tail)
+      (scMap B C g (scMap A B f rest))
+      (scMap A C (fun x => g (f x)) rest) (scMapCompose A B C f g rest)
+  end
+
+-- Pointwise block equality avoids any function-extensionality assumption.
+def rec scMapExpand : (0 A : Type 0) -> (0 B : Type 0) -> (0 C : Type 0) ->
+    (f : B -> C) -> (block : A -> List B) -> (target : A -> List C) ->
+    ((x : A) -> Eq (List C) (scMap B C f (block x)) (target x)) ->
+    (xs : List A) -> Eq (List C) (scMap B C f (scExpand A B block xs))
+      (scExpand A C target xs) :=
+  fun A B C f block target equal xs => match xs as ys return
+      Eq (List C) (scMap B C f (scExpand A B block ys)) (scExpand A C target ys) with
+  | nil => refl (List C) (nil C)
+  | cons x rest => scEqTrans (List C) (scMap B C f (scExpand A B block (cons A x rest)))
+      (scAppend C (scMap B C f (block x)) (scMap B C f (scExpand A B block rest))) (scAppend C (target x) (scExpand A C target rest))
+      (scMapAppend B C f (block x) (scExpand A B block rest))
+      (scEqTrans (List C) (scAppend C (scMap B C f (block x)) (scMap B C f (scExpand A B block rest)))
+        (scAppend C (target x) (scMap B C f (scExpand A B block rest))) (scAppend C (target x) (scExpand A C target rest))
+        (scCong (List C) (List C)
+          (fun head => scAppend C head (scMap B C f (scExpand A B block rest)))
+          (scMap B C f (block x)) (target x) (equal x))
+        (scCong (List C) (List C) (scAppend C (target x))
+          (scMap B C f (scExpand A B block rest)) (scExpand A C target rest) (scMapExpand A B C f block target equal rest)))
+  end
+
+def rec scVectorEnumeration : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    Eq (List (List A))
+      (scMap (ScVector A n) (List A) (scVectorList A n)
+        (scElements (ScVector A n) (scVectorFinite A finite n)))
+      (scWords A (scElements A finite) n) :=
+  fun A finite n => match n as k return Eq (List (List A))
+      (scMap (ScVector A k) (List A) (scVectorList A k)
+        (scElements (ScVector A k) (scVectorFinite A finite k)))
+      (scWords A (scElements A finite) k) with
+  | zero => refl (List (List A)) (cons (List A) (nil A) (nil (List A)))
+  | succ k => scMapExpand A (ScVector A (succ k)) (List A)
+      (scVectorList A (succ k))
+      (fun x => scMap (ScVector A k) (ScVector A (succ k))
+        (fun v => pair A (ScVector A k) x v)
+        (scElements (ScVector A k) (scVectorFinite A finite k)))
+      (fun x => scMap (List A) (List A) (fun tail => cons A x tail) (scWords A (scElements A finite) k))
+      (fun x => scEqTrans (List (List A)) (scMap (ScVector A (succ k)) (List A) (scVectorList A (succ k)) (scMap (ScVector A k) (ScVector A (succ k)) (fun v => pair A (ScVector A k) x v) (scElements (ScVector A k) (scVectorFinite A finite k))))
+        (scMap (ScVector A k) (List A) (fun v => cons A x (scVectorList A k v)) (scElements (ScVector A k) (scVectorFinite A finite k))) (scMap (List A) (List A) (fun tail => cons A x tail) (scWords A (scElements A finite) k))
+        (scMapCompose (ScVector A k) (ScVector A (succ k)) (List A)
+          (fun v => pair A (ScVector A k) x v) (scVectorList A (succ k))
+          (scElements (ScVector A k) (scVectorFinite A finite k)))
+        (scEqTrans (List (List A)) (scMap (ScVector A k) (List A) (fun v => cons A x (scVectorList A k v)) (scElements (ScVector A k) (scVectorFinite A finite k)))
+          (scMap (List A) (List A) (fun tail => cons A x tail) (scMap (ScVector A k) (List A) (scVectorList A k) (scElements (ScVector A k) (scVectorFinite A finite k)))) (scMap (List A) (List A) (fun tail => cons A x tail) (scWords A (scElements A finite) k))
+          (scEqSym (List (List A)) (scMap (List A) (List A) (fun tail => cons A x tail) (scMap (ScVector A k) (List A) (scVectorList A k) (scElements (ScVector A k) (scVectorFinite A finite k)))) (scMap (ScVector A k) (List A) (fun v => cons A x (scVectorList A k v)) (scElements (ScVector A k) (scVectorFinite A finite k)))
+            (scMapCompose (ScVector A k) (List A) (List A)
+              (scVectorList A k) (fun tail => cons A x tail)
+              (scElements (ScVector A k) (scVectorFinite A finite k))))
+          (scCong (List (List A)) (List (List A)) (scMap (List A) (List A) (fun tail => cons A x tail))
+            (scMap (ScVector A k) (List A) (scVectorList A k) (scElements (ScVector A k) (scVectorFinite A finite k)))
+            (scWords A (scElements A finite) k) (scVectorEnumeration A finite k))))
+      (scElements A finite)
+  end
+
+-- Pull a predicate and its decision procedure back along any map.
+def rec scCountMap : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (0 P : B -> Type 0) -> (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq Nat (scCount A (fun x => P (f x)) (fun x => decide (f x)) xs)
+      (scCount B P decide (scMap A B f xs)) :=
+  fun A B f P decide xs => match xs as ys return
+      Eq Nat (scCount A (fun x => P (f x)) (fun x => decide (f x)) ys)
+        (scCount B P decide (scMap A B f ys)) with
+  | nil => refl Nat zero
+  | cons x rest => scCong Nat Nat (scTally (P (f x)) (decide (f x)))
+      (scCount A (fun x => P (f x)) (fun x => decide (f x)) rest)
+      (scCount B P decide (scMap A B f rest)) (scCountMap A B f P decide rest)
+  end
+
+def scVectorWordCount : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    (0 P : List A -> Type 0) -> (decide : (xs : List A) -> ScDec (P xs)) ->
+    Eq Nat
+      (scFiniteCount (ScVector A n) (fun v => P (scVectorList A n v))
+        (fun v => decide (scVectorList A n v)) (scVectorFinite A finite n))
+      (scCount (List A) P decide (scWords A (scElements A finite) n)) :=
+  fun A finite n P decide => scEqTrans Nat
+    (scFiniteCount (ScVector A n) (fun v => P (scVectorList A n v)) (fun v => decide (scVectorList A n v)) (scVectorFinite A finite n))
+    (scCount (List A) P decide (scMap (ScVector A n) (List A) (scVectorList A n) (scElements (ScVector A n) (scVectorFinite A finite n))))
+    (scCount (List A) P decide (scWords A (scElements A finite) n))
+    (scCountMap (ScVector A n) (List A) (scVectorList A n) P decide
+      (scElements (ScVector A n) (scVectorFinite A finite n)))
+    (scCong (List (List A)) Nat (scCount (List A) P decide)
+      (scMap (ScVector A n) (List A) (scVectorList A n) (scElements (ScVector A n) (scVectorFinite A finite n)))
+      (scWords A (scElements A finite) n) (scVectorEnumeration A finite n))
+
+check scMapAppend
+check scMapCompose
+check scMapExpand
+check scVectorEnumeration
+check scCountMap
+check scVectorWordCount

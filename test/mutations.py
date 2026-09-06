@@ -9,6 +9,74 @@ import check
 # Trivialized statements survive every concrete instance; the abstract-argument
 # vector checks are what reject them.
 MUTATIONS = [
+    ('scVectorEnumeration-trivialized', """def rec scVectorEnumeration : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    Eq (List (List A))
+      (scMap (ScVector A n) (List A) (scVectorList A n)
+        (scElements (ScVector A n) (scVectorFinite A finite n)))
+      (scWords A (scElements A finite) n) :=
+  fun A finite n => match n as k return Eq (List (List A))
+      (scMap (ScVector A k) (List A) (scVectorList A k)
+        (scElements (ScVector A k) (scVectorFinite A finite k)))
+      (scWords A (scElements A finite) k) with
+  | zero => refl (List (List A)) (cons (List A) (nil A) (nil (List A)))
+  | succ k => scMapExpand A (ScVector A (succ k)) (List A)
+      (scVectorList A (succ k))
+      (fun x => scMap (ScVector A k) (ScVector A (succ k))
+        (fun v => pair A (ScVector A k) x v)
+        (scElements (ScVector A k) (scVectorFinite A finite k)))
+      (fun x => scMap (List A) (List A) (fun tail => cons A x tail) (scWords A (scElements A finite) k))
+      (fun x => scEqTrans (List (List A)) (scMap (ScVector A (succ k)) (List A) (scVectorList A (succ k)) (scMap (ScVector A k) (ScVector A (succ k)) (fun v => pair A (ScVector A k) x v) (scElements (ScVector A k) (scVectorFinite A finite k))))
+        (scMap (ScVector A k) (List A) (fun v => cons A x (scVectorList A k v)) (scElements (ScVector A k) (scVectorFinite A finite k))) (scMap (List A) (List A) (fun tail => cons A x tail) (scWords A (scElements A finite) k))
+        (scMapCompose (ScVector A k) (ScVector A (succ k)) (List A)
+          (fun v => pair A (ScVector A k) x v) (scVectorList A (succ k))
+          (scElements (ScVector A k) (scVectorFinite A finite k)))
+        (scEqTrans (List (List A)) (scMap (ScVector A k) (List A) (fun v => cons A x (scVectorList A k v)) (scElements (ScVector A k) (scVectorFinite A finite k)))
+          (scMap (List A) (List A) (fun tail => cons A x tail) (scMap (ScVector A k) (List A) (scVectorList A k) (scElements (ScVector A k) (scVectorFinite A finite k)))) (scMap (List A) (List A) (fun tail => cons A x tail) (scWords A (scElements A finite) k))
+          (scEqSym (List (List A)) (scMap (List A) (List A) (fun tail => cons A x tail) (scMap (ScVector A k) (List A) (scVectorList A k) (scElements (ScVector A k) (scVectorFinite A finite k)))) (scMap (ScVector A k) (List A) (fun v => cons A x (scVectorList A k v)) (scElements (ScVector A k) (scVectorFinite A finite k)))
+            (scMapCompose (ScVector A k) (List A) (List A)
+              (scVectorList A k) (fun tail => cons A x tail)
+              (scElements (ScVector A k) (scVectorFinite A finite k))))
+          (scCong (List (List A)) (List (List A)) (scMap (List A) (List A) (fun tail => cons A x tail))
+            (scMap (ScVector A k) (List A) (scVectorList A k) (scElements (ScVector A k) (scVectorFinite A finite k)))
+            (scWords A (scElements A finite) k) (scVectorEnumeration A finite k))))
+      (scElements A finite)
+  end""", """def scVectorEnumeration : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    Eq (List (List A)) (scWords A (scElements A finite) n) (scWords A (scElements A finite) n) :=
+  fun A finite n => refl (List (List A)) (scWords A (scElements A finite) n)""", 1),
+    ('scCountMap-trivialized', """def rec scCountMap : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (0 P : B -> Type 0) -> (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq Nat (scCount A (fun x => P (f x)) (fun x => decide (f x)) xs)
+      (scCount B P decide (scMap A B f xs)) :=
+  fun A B f P decide xs => match xs as ys return
+      Eq Nat (scCount A (fun x => P (f x)) (fun x => decide (f x)) ys)
+        (scCount B P decide (scMap A B f ys)) with
+  | nil => refl Nat zero
+  | cons x rest => scCong Nat Nat (scTally (P (f x)) (decide (f x)))
+      (scCount A (fun x => P (f x)) (fun x => decide (f x)) rest)
+      (scCount B P decide (scMap A B f rest)) (scCountMap A B f P decide rest)
+  end""", """def scCountMap : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (0 P : B -> Type 0) -> (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq (Nat) (scCount B P decide (scMap A B f xs)) (scCount B P decide (scMap A B f xs)) :=
+  fun A B f P decide xs => refl (Nat) (scCount B P decide (scMap A B f xs))""", 1),
+    ('scVectorWordCount-trivialized', """def scVectorWordCount : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    (0 P : List A -> Type 0) -> (decide : (xs : List A) -> ScDec (P xs)) ->
+    Eq Nat
+      (scFiniteCount (ScVector A n) (fun v => P (scVectorList A n v))
+        (fun v => decide (scVectorList A n v)) (scVectorFinite A finite n))
+      (scCount (List A) P decide (scWords A (scElements A finite) n)) :=
+  fun A finite n P decide => scEqTrans Nat
+    (scFiniteCount (ScVector A n) (fun v => P (scVectorList A n v)) (fun v => decide (scVectorList A n v)) (scVectorFinite A finite n))
+    (scCount (List A) P decide (scMap (ScVector A n) (List A) (scVectorList A n) (scElements (ScVector A n) (scVectorFinite A finite n))))
+    (scCount (List A) P decide (scWords A (scElements A finite) n))
+    (scCountMap (ScVector A n) (List A) (scVectorList A n) P decide
+      (scElements (ScVector A n) (scVectorFinite A finite n)))
+    (scCong (List (List A)) Nat (scCount (List A) P decide)
+      (scMap (ScVector A n) (List A) (scVectorList A n) (scElements (ScVector A n) (scVectorFinite A finite n)))
+      (scWords A (scElements A finite) n) (scVectorEnumeration A finite n))""", """def scVectorWordCount : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    (0 P : List A -> Type 0) -> (decide : (xs : List A) -> ScDec (P xs)) ->
+    Eq (Nat) (scCount (List A) P decide (scWords A (scElements A finite) n)) (scCount (List A) P decide (scWords A (scElements A finite) n)) :=
+  fun A finite n P decide => refl (Nat) (scCount (List A) P decide (scWords A (scElements A finite) n))""", 1),
+
     ("round-trip-trivialized", """def rec scListVectorRoundTrip : (0 A : Type 0) -> (xs : List A) ->
     Eq (List A) (scVectorList A (scLength A xs) (scListVector A xs)) xs :=
   fun A xs => match xs as ys return
@@ -101,7 +169,7 @@ MUTATIONS = [
     ("append-drops-left", "cons A x (scAppend A rest ys)",
      "scAppend A rest ys", 1),
     ("zero-round-has-no-word", "cons (List A) (nil A) (nil (List A))",
-     "nil (List A)", 1),
+     "nil (List A)", 2),
     ("words-omit-challenge", "fun word => cons A x word", "fun word => word", 6),
     ("words-double-challenge", "fun word => cons A x word",
      "fun word => cons A x (cons A x word)", 6),

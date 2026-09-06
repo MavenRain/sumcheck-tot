@@ -18,6 +18,8 @@ and a checked product cardinality.
 Fixed-length vectors now form finite carriers with decidable equality and
 cardinality `|F|^n`. Their list conversion preserves length and is injective;
 every list converts to a vector at its own length and back unchanged.
+Converting the full vector enumeration gives exactly the challenge-word list,
+in the same order. Predicate counts agree under this conversion.
 
 ## Check
 
@@ -105,6 +107,17 @@ compiler rebuild is required when a built checker exists.
 - `scVectorWordMember`: each converted vector belongs to the existing
   `scWords` enumeration at the vector's specified round count.
 
+- `scMapAppend`, `scMapCompose`, and `scMapExpand`: mapping distributes over
+  append, composes, and preserves expansion under pointwise block equality.
+  These proofs require no function extensionality.
+- `scVectorEnumeration`: mapping `scVectorList` over the packaged vector
+  enumeration equals `scWords` at the specified round count, preserving
+  order and multiplicity, including zero rounds and empty carriers.
+- `scCountMap`: counting a predicate after a map equals counting its pullback
+  before the map, using the same decision procedure.
+- `scVectorWordCount`: finite vector counts of a list predicate pulled back
+  through `scVectorList` equal its challenge-word counts.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -138,15 +151,21 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all thirty-six checks passed with checker SHA-256
+On 2026-09-06, all thirty-nine checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The thirty-six checks:
+The thirty-nine checks:
 
 - All generic proofs check without a prelude or axioms.
+- Enumeration conversion and count equality check at abstract arguments,
+  alongside the three generic map lemmas and count-map lemma. Concrete
+  instances cover two-bit vectors, empty carriers at zero and two rounds,
+  and all/none/head-high predicates.
+- Count equality used with different predicates on its two sides is rejected.
+- Enumeration equality used at the wrong round count is rejected.
 - Finite vectors check cardinality, membership, uniqueness, exact list
   conversions, round trips, injectivity, length, word membership, and
   all/none/singleton counts with a count bound. Empty carriers at zero and
@@ -208,7 +227,10 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check twenty-six deliberate mutations in memory. All twenty-six were caught:
+suite and check twenty-nine deliberate mutations in memory. All twenty-nine were caught.
+Three new mutations consistently trivialize the enumeration, count-map, and
+vector-word-count statements. Their consumers catch the first two; the
+abstract count-equality regression catches the third. The existing controls cover:
 incorrect multiplication and power base cases, dropped append entries,
 missing zero-round words, omitted challenges, doubled challenges, and dropped
 head or tail obligations in pointwise evidence, dropped head or tail
@@ -233,16 +255,16 @@ nonemptiness. Product and word size formulas count list entries with
 multiplicity for arbitrary input lists. For duplicate-free inputs, the
 uniqueness theorems now justify interpreting the entries as distinct outcomes.
 Fixed-length words are packaged through `ScVector`, rather than the type
-of all lists. Enumeration independence of counts and equality between
-vector predicate counts and the corresponding list-word counts remain
-future work.
+of all lists. Vector predicate counts now equal the corresponding list-word counts for
+predicates pulled back through the conversion. Independence from the choice
+of finite enumeration remains future work.
 The word count bound
 is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 ## Next milestones
 
-1. Establish enumeration independence, connect vector counts to list-word
-   counts, and prove the remaining arithmetic needed for soundness.
+1. Establish enumeration independence and prove the remaining arithmetic
+   needed for soundness.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -258,7 +280,7 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
-`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`.
+`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`, `src/VectorEnumeration.tot`.
 
 ## License
 

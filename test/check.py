@@ -11,7 +11,7 @@ TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
-                  "FiniteProducts.tot", "FiniteVectors.tot"))
+                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -154,6 +154,92 @@ VECTOR_CHECKS += "\n".join(
 
 CASES = [
     ("generic-proofs", "", None),
+    ('vector-word-counts', PRODUCT_EXAMPLE + """def scMapAppendAt : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (xs : List A) -> (ys : List A) ->
+    Eq (List B) (scMap A B f (scAppend A xs ys))
+      (scAppend B (scMap A B f xs) (scMap A B f ys)) :=
+  fun A B f xs ys => scMapAppend A B f xs ys
+
+def scMapComposeAt : (0 A : Type 0) -> (0 B : Type 0) -> (0 C : Type 0) ->
+    (f : A -> B) -> (g : B -> C) -> (xs : List A) ->
+    Eq (List C) (scMap B C g (scMap A B f xs))
+      (scMap A C (fun x => g (f x)) xs) :=
+  fun A B C f g xs => scMapCompose A B C f g xs
+
+def scMapExpandAt : (0 A : Type 0) -> (0 B : Type 0) -> (0 C : Type 0) ->
+    (f : B -> C) -> (block : A -> List B) -> (target : A -> List C) ->
+    ((x : A) -> Eq (List C) (scMap B C f (block x)) (target x)) ->
+    (xs : List A) -> Eq (List C) (scMap B C f (scExpand A B block xs))
+      (scExpand A C target xs) :=
+  fun A B C f block target equal xs => scMapExpand A B C f block target equal xs
+
+def scVectorEnumerationAt : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    Eq (List (List A))
+      (scMap (ScVector A n) (List A) (scVectorList A n)
+        (scElements (ScVector A n) (scVectorFinite A finite n)))
+      (scWords A (scElements A finite) n) :=
+  fun A finite n => scVectorEnumeration A finite n
+
+def scCountMapAt : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (0 P : B -> Type 0) -> (decide : (y : B) -> ScDec (P y)) -> (xs : List A) ->
+    Eq Nat (scCount A (fun x => P (f x)) (fun x => decide (f x)) xs)
+      (scCount B P decide (scMap A B f xs)) :=
+  fun A B f P decide xs => scCountMap A B f P decide xs
+
+def scVectorWordCountAt : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
+    (0 P : List A -> Type 0) -> (decide : (xs : List A) -> ScDec (P xs)) ->
+    Eq Nat
+      (scFiniteCount (ScVector A n) (fun v => P (scVectorList A n v))
+        (fun v => decide (scVectorList A n v)) (scVectorFinite A finite n))
+      (scCount (List A) P decide (scWords A (scElements A finite) n)) :=
+  fun A finite n P decide => scVectorWordCount A finite n P decide
+
+def enumBits : Eq (List (List ScBit))
+    (scMap (ScVector ScBit twoN) (List ScBit) (scVectorList ScBit twoN)
+      (scElements (ScVector ScBit twoN) (scVectorFinite ScBit scBitFinite twoN)))
+    (scWords ScBit scBits twoN) := scVectorEnumeration ScBit scBitFinite twoN
+def enumEmptyZero : Eq (List (List ScEmpty))
+    (scMap (ScVector ScEmpty zero) (List ScEmpty) (scVectorList ScEmpty zero)
+      (scElements (ScVector ScEmpty zero) (scVectorFinite ScEmpty emptyProductFactor zero)))
+    (cons (List ScEmpty) (nil ScEmpty) (nil (List ScEmpty))) :=
+  scVectorEnumeration ScEmpty emptyProductFactor zero
+def enumEmptyTwo : Eq (List (List ScEmpty))
+    (scMap (ScVector ScEmpty twoN) (List ScEmpty) (scVectorList ScEmpty twoN)
+      (scElements (ScVector ScEmpty twoN) (scVectorFinite ScEmpty emptyProductFactor twoN)))
+    (nil (List ScEmpty)) := scVectorEnumeration ScEmpty emptyProductFactor twoN
+
+def allWordCount : Eq Nat
+    (scFiniteCount (ScVector ScBit twoN) (fun v => ScUnit)
+      (fun v => scYes ScUnit scUnit) (scVectorFinite ScBit scBitFinite twoN))
+    (scCount (List ScBit) (fun xs => ScUnit) (fun xs => scYes ScUnit scUnit) (scWords ScBit scBits twoN)) :=
+  scVectorWordCount ScBit scBitFinite twoN (fun xs => ScUnit) (fun xs => scYes ScUnit scUnit)
+
+def noneWordCount : Eq Nat
+    (scFiniteCount (ScVector ScBit twoN) (fun v => ScEmpty)
+      (fun v => scNo ScEmpty (fun h => h)) (scVectorFinite ScBit scBitFinite twoN))
+    (scCount (List ScBit) (fun xs => ScEmpty) (fun xs => scNo ScEmpty (fun h => h)) (scWords ScBit scBits twoN)) :=
+  scVectorWordCount ScBit scBitFinite twoN (fun xs => ScEmpty) (fun xs => scNo ScEmpty (fun h => h))
+
+def headHighWordCount : Eq Nat
+    (scFiniteCount (ScVector ScBit twoN) (fun v => Eq ScBit (scHeadOr ScBit scLow (scVectorList ScBit twoN v)) scHigh)
+      (fun v => scBitDecEq (scHeadOr ScBit scLow (scVectorList ScBit twoN v)) scHigh) (scVectorFinite ScBit scBitFinite twoN))
+    (scCount (List ScBit) (fun xs => Eq ScBit (scHeadOr ScBit scLow xs) scHigh) (fun xs => scBitDecEq (scHeadOr ScBit scLow xs) scHigh) (scWords ScBit scBits twoN)) :=
+  scVectorWordCount ScBit scBitFinite twoN (fun xs => Eq ScBit (scHeadOr ScBit scLow xs) scHigh) (fun xs => scBitDecEq (scHeadOr ScBit scLow xs) scHigh)
+""", None),
+    ('vector-word-count-wrong-predicate', PRODUCT_EXAMPLE + """
+def wrongPredicate : Eq Nat
+    (scFiniteCount (ScVector ScBit twoN) (fun v => ScUnit)
+      (fun v => scYes ScUnit scUnit) (scVectorFinite ScBit scBitFinite twoN))
+    (scCount (List ScBit) (fun xs => ScEmpty) (fun xs => scNo ScEmpty (fun h => h))
+      (scWords ScBit scBits twoN)) :=
+  scVectorWordCount ScBit scBitFinite twoN (fun xs => ScUnit) (fun xs => scYes ScUnit scUnit)
+""", 'mismatch'),
+    ('vector-enumeration-wrong-rounds', PRODUCT_EXAMPLE + """
+def wrongEnumeration : Eq (List (List ScBit))
+    (scMap (ScVector ScBit twoN) (List ScBit) (scVectorList ScBit twoN)
+      (scElements (ScVector ScBit twoN) (scVectorFinite ScBit scBitFinite twoN)))
+    (scWords ScBit scBits oneN) := scVectorEnumeration ScBit scBitFinite twoN
+""", 'mismatch'),
     ("finite-vectors", VECTOR_CHECKS, None),
     ("vector-missing-coordinate", VECTOR_EXAMPLE + """
 def missingCoordinate : ScVector ScBit twoN := pair ScBit ScUnit scHigh scUnit
