@@ -1,0 +1,192 @@
+-- Algebraic acceptance is decidable from carrier equality alone.
+reducible def scPairDec : (0 P : Type 0) -> (0 Q : Type 0) ->
+    ScDec P -> ScDec Q -> ScDec (Pair P Q) :=
+  fun P Q dp dq => match dp with
+  | scYes p => match dq with
+    | scYes q => scYes (Pair P Q) (pair P Q p q)
+    | scNo reject => scNo (Pair P Q) (fun h => reject (scSecond P Q h))
+    end
+  | scNo refute => scNo (Pair P Q) (fun h => refute (scFirst P Q h))
+  end
+
+reducible def rec scAcceptDec : (0 F : Type 0) ->
+    ((x : F) -> (y : F) -> ScDec (Eq F x y)) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (trace : ScTrace F) ->
+    (g : List F -> F) -> (claim : F) ->
+    ScDec (scAccept F plus lo hi trace g claim) :=
+  fun F decide plus lo hi trace => match trace as t return
+      (g : List F -> F) -> (claim : F) ->
+      ScDec (scAccept F plus lo hi t g claim) with
+  | scDone => fun g claim => decide claim (g (nil F))
+  | scStep message r rest => fun g claim => scPairDec
+      (Eq F (plus (message lo) (message hi)) claim)
+      (scAccept F plus lo hi rest (scRestrict F g r) (message r))
+      (decide (plus (message lo) (message hi)) claim)
+      (scAcceptDec F decide plus lo hi rest (scRestrict F g r) (message r))
+  end
+
+reducible def scStrategyAccept : (0 F : Type 0) -> (F -> F -> F) -> F -> F ->
+    (n : Nat) -> ScStrategy F n -> (List F -> F) -> F -> ScVector F n -> Type 0 :=
+  fun F plus lo hi n strategy g claim v =>
+    scAccept F plus lo hi (scRunStrategy F n strategy v) g claim
+
+reducible def scStrategyAcceptDec : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    (v : ScVector F n) -> ScDec (scStrategyAccept F plus lo hi n strategy g claim v) :=
+  fun F finite plus lo hi n strategy g claim v =>
+    scAcceptDec F (scDecEq F finite) plus lo hi (scRunStrategy F n strategy v) g claim
+
+reducible def scAcceptingCount : (0 F : Type 0) -> ScFinite F ->
+    (F -> F -> F) -> F -> F -> (n : Nat) -> ScStrategy F n -> (List F -> F) -> F -> Nat :=
+  fun F finite plus lo hi n strategy g claim => scFiniteCount (ScVector F n)
+    (scStrategyAccept F plus lo hi n strategy g claim)
+    (scStrategyAcceptDec F finite plus lo hi n strategy g claim) (scVectorFinite F finite n)
+
+-- These list lemmas retain multiplicity and require no finite-carrier laws.
+def rec scCountSatisfied : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> ((x : A) -> P x) -> (xs : List A) ->
+    Eq Nat (scCount A P decide xs) (scLength A xs) :=
+  fun A P decide holds xs => match xs as ys return
+      Eq Nat (scCount A P decide ys) (scLength A ys) with
+  | nil => refl Nat zero
+  | cons x rest => match decide x as d return
+      Eq Nat (scTally (P x) d (scCount A P decide rest)) (succ (scLength A rest)) with
+    | scYes p => scSuccCong (scCount A P decide rest) (scLength A rest)
+        (scCountSatisfied A P decide holds rest)
+    | scNo refute => match refute (holds x) with end
+    end
+  end
+
+def rec scCountRefuted : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> ((x : A) -> P x -> ScEmpty) ->
+    (xs : List A) -> Eq Nat (scCount A P decide xs) zero :=
+  fun A P decide refutes xs => match xs as ys return
+      Eq Nat (scCount A P decide ys) zero with
+  | nil => refl Nat zero
+  | cons x rest => match decide x as d return
+      Eq Nat (scTally (P x) d (scCount A P decide rest)) zero with
+    | scYes p => match refutes x p with end
+    | scNo reject => scCountRefuted A P decide refutes rest
+    end
+  end
+
+def scAcceptingCountBound : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScLe (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scPow (scCardinality F finite) n) :=
+  fun F finite plus lo hi n strategy g claim => scVectorCountBound F finite n
+    (scStrategyAccept F plus lo hi n strategy g claim)
+    (scStrategyAcceptDec F finite plus lo hi n strategy g claim)
+
+def scHonestAcceptingCount : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) -> (g : List F -> F) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi n
+      (scHonestStrategy F plus lo hi n g) g (scSum F plus lo hi n g))
+      (scPow (scCardinality F finite) n) :=
+  fun F finite plus lo hi n g => scEqTrans Nat
+    (scAcceptingCount F finite plus lo hi n
+      (scHonestStrategy F plus lo hi n g) g (scSum F plus lo hi n g))
+    (scCardinality (ScVector F n) (scVectorFinite F finite n))
+    (scPow (scCardinality F finite) n)
+    (scCountSatisfied (ScVector F n)
+      (scStrategyAccept F plus lo hi n (scHonestStrategy F plus lo hi n g) g
+        (scSum F plus lo hi n g))
+      (scStrategyAcceptDec F finite plus lo hi n (scHonestStrategy F plus lo hi n g) g
+        (scSum F plus lo hi n g))
+      (fun v => scHonestStrategyCompleteness F plus lo hi n v g)
+      (scElements (ScVector F n) (scVectorFinite F finite n)))
+    (scVectorCardinality F finite n)
+
+def scFalseZeroAcceptingCount : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) ->
+    (strategy : ScStrategy F zero) -> (g : List F -> F) -> (claim : F) ->
+    (Eq F claim (g (nil F)) -> ScEmpty) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi zero strategy g claim) zero :=
+  fun F finite plus lo hi strategy g claim different => scCountRefuted ScUnit
+    (scStrategyAccept F plus lo hi zero strategy g claim)
+    (scStrategyAcceptDec F finite plus lo hi zero strategy g claim)
+    (fun v accepted => different accepted) (scElements ScUnit scUnitFinite)
+
+-- A successful first check leaves exactly the sum of adaptive continuation counts.
+def scAcceptingCountStep : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq F (plus (message lo) (message hi)) claim ->
+    Eq Nat (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+        (next r) (scRestrict F g r) (message r)) (scElements F finite)) :=
+  fun F finite plus lo hi n message next g claim valid => scEqTrans Nat
+    (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+    (scSumOver F (fun r => scFiniteCount (ScVector F n)
+      (fun v => Pair (Eq F (plus (message lo) (message hi)) claim)
+        (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r) (message r) v))
+      (fun v => scStrategyAcceptDec F finite plus lo hi (succ n)
+        (pair (F -> F) (F -> ScStrategy F n) message next) g claim
+        (pair F (ScVector F n) r v)) (scVectorFinite F finite n)) (scElements F finite))
+    (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+      (next r) (scRestrict F g r) (message r)) (scElements F finite))
+    (scCountProduct F (ScVector F n)
+      (scStrategyAccept F plus lo hi (succ n)
+        (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scStrategyAcceptDec F finite plus lo hi (succ n)
+        (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scElements F finite) (scElements (ScVector F n) (scVectorFinite F finite n)))
+    (scSumOverCong F
+      (fun r => scFiniteCount (ScVector F n)
+        (fun v => Pair (Eq F (plus (message lo) (message hi)) claim)
+          (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r) (message r) v))
+        (fun v => scStrategyAcceptDec F finite plus lo hi (succ n)
+          (pair (F -> F) (F -> ScStrategy F n) message next) g claim
+          (pair F (ScVector F n) r v)) (scVectorFinite F finite n))
+      (fun r => scAcceptingCount F finite plus lo hi n
+        (next r) (scRestrict F g r) (message r))
+      (fun r => scCountEquivalent (ScVector F n)
+      (fun v => Pair (Eq F (plus (message lo) (message hi)) claim)
+        (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r) (message r) v))
+      (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r) (message r))
+      (fun v accepted => scSecond (Eq F (plus (message lo) (message hi)) claim)
+        (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r) (message r) v) accepted)
+      (fun v accepted => pair (Eq F (plus (message lo) (message hi)) claim)
+        (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r) (message r) v)
+        valid accepted)
+      (fun v => scStrategyAcceptDec F finite plus lo hi (succ n)
+        (pair (F -> F) (F -> ScStrategy F n) message next) g claim
+        (pair F (ScVector F n) r v))
+      (scStrategyAcceptDec F finite plus lo hi n (next r) (scRestrict F g r) (message r))
+      (scElements (ScVector F n) (scVectorFinite F finite n))) (scElements F finite))
+
+def scRejectedRoundCount : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    (Eq F (plus (message lo) (message hi)) claim -> ScEmpty) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim) zero :=
+  fun F finite plus lo hi n message next g claim invalid =>
+    scCountRefuted (ScVector F (succ n))
+      (scStrategyAccept F plus lo hi (succ n)
+        (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scStrategyAcceptDec F finite plus lo hi (succ n)
+        (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (fun v => match v as w return scStrategyAccept F plus lo hi (succ n)
+          (pair (F -> F) (F -> ScStrategy F n) message next) g claim w -> ScEmpty with
+        | pair r rest => fun accepted => invalid
+            (scFirst (Eq F (plus (message lo) (message hi)) claim)
+              (scStrategyAccept F plus lo hi n (next r) (scRestrict F g r)
+                (message r) rest) accepted)
+        end)
+      (scElements (ScVector F (succ n)) (scVectorFinite F finite (succ n)))
+
+check scAcceptDec
+check scCountSatisfied
+check scCountRefuted
+check scAcceptingCountBound
+check scHonestAcceptingCount
+check scFalseZeroAcceptingCount
+check scAcceptingCountStep
+check scRejectedRoundCount

@@ -13,7 +13,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
-                  "Recurrence.tot", "Strategies.tot"))
+                  "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -454,8 +454,140 @@ def scHonestStrategyCompletenessAt : (0 F : Type 0) -> (plus : F -> F -> F) ->
 
 """
 
+ACCEPTANCE_CHECKS = """
+def scCountSatisfiedAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> ((x : A) -> P x) -> (xs : List A) ->
+    Eq Nat (scCount A P decide xs) (scLength A xs) :=
+  fun A P decide holds xs => scCountSatisfied A P decide holds xs
+
+def scCountRefutedAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> ((x : A) -> P x -> ScEmpty) ->
+    (xs : List A) -> Eq Nat (scCount A P decide xs) zero :=
+  fun A P decide refutes xs => scCountRefuted A P decide refutes xs
+
+def scAcceptingCountBoundAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScLe (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scPow (scCardinality F finite) n) :=
+  fun F finite plus lo hi n strategy g claim =>
+    scAcceptingCountBound F finite plus lo hi n strategy g claim
+
+def scHonestAcceptingCountAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) -> (g : List F -> F) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi n
+      (scHonestStrategy F plus lo hi n g) g (scSum F plus lo hi n g))
+      (scPow (scCardinality F finite) n) :=
+  fun F finite plus lo hi n g => scHonestAcceptingCount F finite plus lo hi n g
+
+def scFalseZeroAcceptingCountAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) ->
+    (strategy : ScStrategy F zero) -> (g : List F -> F) -> (claim : F) ->
+    (Eq F claim (g (nil F)) -> ScEmpty) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi zero strategy g claim) zero :=
+  fun F finite plus lo hi strategy g claim different =>
+    scFalseZeroAcceptingCount F finite plus lo hi strategy g claim different
+
+def scAcceptingCountStepAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq F (plus (message lo) (message hi)) claim ->
+    Eq Nat (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+        (next r) (scRestrict F g r) (message r)) (scElements F finite)) :=
+  fun F finite plus lo hi n message next g claim valid =>
+    scAcceptingCountStep F finite plus lo hi n message next g claim valid
+
+def scRejectedRoundCountAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    (Eq F (plus (message lo) (message hi)) claim -> ScEmpty) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim) zero :=
+  fun F finite plus lo hi n message next g claim invalid =>
+    scRejectedRoundCount F finite plus lo hi n message next g claim invalid
+"""
+
+ACCEPTANCE_EXAMPLE = EXAMPLE + """
+reducible def bitPlus : ScBit -> ScBit -> ScBit := fun x y => x
+reducible def bitGoal : List ScBit -> ScBit := fun xs => scLow
+reducible def adaptiveBits : ScStrategy ScBit twoN :=
+  pair (ScBit -> ScBit) (ScBit -> ScStrategy ScBit oneN) (fun r => r)
+    (fun r => pair (ScBit -> ScBit) (ScBit -> ScUnit)
+      (fun s => scLow) (fun s => scUnit))
+reducible def bitAcceptCount : ScBit -> Nat := fun claim =>
+  scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh twoN adaptiveBits bitGoal claim
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("acceptance-counting", ACCEPTANCE_CHECKS, None),
+    ("acceptance-count-examples", ACCEPTANCE_EXAMPLE + """
+def adaptiveHalf : Eq Nat (bitAcceptCount scLow) twoN := refl Nat twoN
+def rejectedHead : Eq Nat (bitAcceptCount scHigh) zero := refl Nat zero
+def honestAll : Eq Nat (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh twoN
+    (scHonestStrategy ScBit bitPlus scLow scHigh twoN bitGoal) bitGoal scLow) fourN :=
+  scHonestAcceptingCount ScBit scBitFinite bitPlus scLow scHigh twoN bitGoal
+def terminalTrue : Eq Nat (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh
+    zero scUnit bitGoal scLow) oneN := refl Nat oneN
+def terminalFalse : Eq Nat (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh
+    zero scUnit bitGoal scHigh) zero := refl Nat zero
+def restrictionAndClaim : Eq Nat (scAcceptingCount ScBit scBitFinite bitPlus
+    scLow scHigh oneN
+    (pair (ScBit -> ScBit) (ScBit -> ScUnit) (fun r => r) (fun r => scUnit))
+    (scHeadOr ScBit scLow) scLow) twoN := refl Nat twoN
+def splitAdaptive : Eq Nat (bitAcceptCount scLow)
+    (scSumOver ScBit (fun r => scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh
+      oneN (pair (ScBit -> ScBit) (ScBit -> ScUnit) (fun s => scLow) (fun s => scUnit))
+      (scRestrict ScBit bitGoal r) r) scBits) :=
+  scAcceptingCountStep ScBit scBitFinite bitPlus scLow scHigh oneN (fun r => r)
+    (fun r => pair (ScBit -> ScBit) (ScBit -> ScUnit)
+      (fun s => scLow) (fun s => scUnit)) bitGoal scLow (refl ScBit scLow)
+""", None),
+    ("acceptance-step-missing-round-check", """
+def missingRound : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+        (next r) (scRestrict F g r) (message r)) (scElements F finite)) :=
+  fun F finite plus lo hi n message next g claim =>
+    scAcceptingCountStep F finite plus lo hi n message next g claim
+""", "mismatch"),
+    ("acceptance-rejected-round-missing-refutation", """
+def missingRefutation : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim) zero :=
+  fun F finite plus lo hi n message next g claim =>
+    scRejectedRoundCount F finite plus lo hi n message next g claim
+""", "mismatch"),
+    ("acceptance-zero-missing-falsity", """
+def missingFalsity : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) ->
+    (strategy : ScStrategy F zero) -> (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi zero strategy g claim) zero :=
+  fun F finite plus lo hi strategy g claim =>
+    scFalseZeroAcceptingCount F finite plus lo hi strategy g claim
+""", "mismatch"),
+    ("acceptance-honest-wrong-claim", """
+def wrongHonestCount : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scAcceptingCount F finite plus lo hi n
+      (scHonestStrategy F plus lo hi n g) g claim) (scPow (scCardinality F finite) n) :=
+  fun F finite plus lo hi n g claim => scHonestAcceptingCount F finite plus lo hi n g
+""", "mismatch"),
+    ("acceptance-tail-cannot-be-ignored", ACCEPTANCE_EXAMPLE + """
+def ignoresTail : Eq Nat (bitAcceptCount scLow) fourN := refl Nat fourN
+""", "mismatch"),
     ("strategies", STRATEGY_CHECKS, None),
     ("strategy-examples", EXAMPLE + """
 reducible def adaptiveN : ScStrategy Nat twoN :=

@@ -34,6 +34,11 @@ Fixed-round adaptive strategies choose each message before the challenge
 selects a continuation. Running a strategy preserves the challenge order and
 produces exactly the indexed number of rounds. Honest strategies recover the
 original honest transcripts and satisfy algebraic acceptance.
+Algebraic acceptance is decidable from carrier equality. Accepting challenge
+vectors can be counted exactly: honest play accepts all `|F|^n` vectors,
+false zero-round claims accept none, and a valid first-round check splits
+the count into a sum over adaptive continuations. A failed first-round check
+gives count zero.
 
 ## Check
 
@@ -347,7 +352,9 @@ not show that the false statements are unprovable.
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
 suite and check sixty-seven deliberate mutations in memory. All were caught.
 Four strategy mutations consistently weaken the public theorem statements
-and replace their proofs; the abstract strategy checks reject all four.
+and replace their proofs. The abstract strategy checks reject the length,
+challenge-order, and trace-bridge weakenings; the honest-count theorem now
+rejects the completeness weakening in the generic proofs.
 Three runner mutations drop a round, select a continuation using the message
 evaluation instead of the challenge, or record that evaluation as the challenge.
 Generic proofs reject all three.
@@ -401,6 +408,35 @@ of finite enumeration remains future work.
 The word count bound
 is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
+## Acceptance counting
+
+The acceptance-counting layer in `src/AcceptanceCounting.tot` provides:
+
+- `scAcceptDec`, `scStrategyAccept`, and `scStrategyAcceptDec`, connecting
+  the original transcript relation to decidable fixed-round acceptance.
+- `scAcceptingCount` and `scAcceptingCountBound`, counting successful vectors
+  in `scVectorFinite` and bounding the count by `|F|^n`.
+- `scCountSatisfied` and `scCountRefuted`, generic list-count lemmas for
+  predicates with pointwise proofs or refutations, preserving multiplicity.
+- `scHonestAcceptingCount`, the exact count `|F|^n` at the honest initial
+  claim, and `scFalseZeroAcceptingCount`, count zero given a refutation of
+  the terminal equality.
+- `scAcceptingCountStep`, the exact sum of continuation counts when the
+  first-round equality holds. Each challenge `r` selects `next r`, restricts
+  the target to `scRestrict F g r`, and sets the next claim to `message r`.
+- `scRejectedRoundCount`, count zero given a refutation of the first-round
+  equality, independently of the continuation strategies.
+
+Validation adds abstract checks for all seven count theorems, concrete
+zero-round success and failure, full honest acceptance, partial acceptance,
+failed first-round checks, and challenge-dependent restriction and claims.
+Five rejection controls cover missing round-check evidence, missing terminal
+falsity, missing round refutation, an arbitrary honest initial claim, and
+ignoring continuation rejection. Seven mutations replace count theorems
+with reflexive statements and proofs. The suite must reject each weakening.
+These results concern algebraic acceptance only. They do not impose degree
+bounds or establish a soundness error bound.
+
 ## Next milestones
 
 1. Establish independence from the finite enumeration. Predicate monotonicity,
@@ -414,9 +450,9 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
    the required degree bound, then extend acceptance and completeness.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
-4. Adaptive strategies and enforced round counts are defined, with honest
-   completeness proved. Add degree constraints and count accepting challenge
-   vectors for false claims by induction. Target
+4. Adaptive strategies, enforced round counts, decidable acceptance, and the
+   exact first-round count decomposition are proved. Add degree constraints
+   and bound accepting challenge vectors for false claims by induction. Target
    `|F| * acceptingCount <= n * d * |F|^n` for individual degree at most d.
 5. Interpret that count under independent uniform challenges to obtain
    soundness error at most `n*d/|F|`. If intermediate results take a root
@@ -426,7 +462,8 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
-`src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`.
+`src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
+`src/AcceptanceCounting.tot`.
 
 ## License
 
