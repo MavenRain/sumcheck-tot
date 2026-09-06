@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TOT = ROOT.parent / "tot" / "_build" / "default" / "bin" / "tot.exe"
 TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
-                 ("Foundation.tot", "Completeness.tot"))
+                 ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -27,6 +27,66 @@ reducible def honestN : ScTrace Nat :=
 # status 1 and print that string in its diagnostic.
 CASES = [
     ("generic-completeness", "", None),
+    ("finite-counts", """
+reducible def emptyFinite : ScFinite ScEmpty :=
+  scFinite ScEmpty (nil ScEmpty)
+    (fun x => match x with end) scUnit
+    (fun x y => match x with end)
+def emptyCardinality : Eq Nat (scCardinality ScEmpty emptyFinite) zero :=
+  refl Nat zero
+def bitCardinality : Eq Nat (scCardinality ScBit scBitFinite) (succ (succ zero)) :=
+  refl Nat (succ (succ zero))
+def emptyCount : Eq Nat
+    (scCount ScBit (fun x => ScUnit) (fun x => scYes ScUnit scUnit) (nil ScBit))
+    zero := refl Nat zero
+def allCount : Eq Nat
+    (scFiniteCount ScBit (fun x => ScUnit) (fun x => scYes ScUnit scUnit) scBitFinite)
+    (succ (succ zero)) := refl Nat (succ (succ zero))
+def noneCount : Eq Nat
+    (scFiniteCount ScBit (fun x => ScEmpty)
+      (fun x => scNo ScEmpty (fun impossible => impossible)) scBitFinite)
+    zero := refl Nat zero
+def highCount : Eq Nat
+    (scFiniteCount ScBit (fun x => Eq ScBit x scHigh)
+      (fun x => scBitDecEq x scHigh) scBitFinite)
+    (succ zero) := refl Nat (succ zero)
+def lowCount : Eq Nat
+    (scFiniteCount ScBit (fun x => Eq ScBit x scLow)
+      (fun x => scDecEq ScBit scBitFinite x scLow) scBitFinite)
+    (succ zero) := refl Nat (succ zero)
+def concreteCountBound : ScLe
+    (scFiniteCount ScBit (fun x => Eq ScBit x scHigh)
+      (fun x => scBitDecEq x scHigh) scBitFinite)
+    (scCardinality ScBit scBitFinite) :=
+  scFiniteCountBound ScBit (fun x => Eq ScBit x scHigh)
+    (fun x => scBitDecEq x scHigh) scBitFinite
+""", None),
+    ("missing-element", """
+def missingHigh : scMember ScBit scHigh (cons ScBit scLow (nil ScBit)) :=
+  scLeft (Eq ScBit scHigh scLow) ScEmpty (refl ScBit scHigh)
+""", "mismatch"),
+    ("duplicate-enumeration", """
+def duplicateUnique : scNoDup ScBit
+    (cons ScBit scLow (cons ScBit scLow (nil ScBit))) :=
+  pair (scMember ScBit scLow (cons ScBit scLow (nil ScBit)) -> ScEmpty)
+    (scNoDup ScBit (cons ScBit scLow (nil ScBit)))
+    (fun member => match member with
+      | scLeft h => scLowNeHigh h | scRight impossible => impossible end)
+    (pair (ScEmpty -> ScEmpty) ScUnit (fun impossible => impossible) scUnit)
+""", "mismatch"),
+    ("false-equality-decision", """
+def falseDecision : ScDec (Eq ScBit scLow scHigh) :=
+  scYes (Eq ScBit scLow scHigh) (refl ScBit scLow)
+""", "mismatch"),
+    ("wrong-count", """
+def wrongCount : Eq Nat
+    (scFiniteCount ScBit (fun x => Eq ScBit x scHigh)
+      (fun x => scBitDecEq x scHigh) scBitFinite)
+    zero := refl Nat zero
+""", "mismatch"),
+    ("false-order-bound", """
+def falseBound : ScLe (succ zero) zero := scLeZero zero
+""", "mismatch"),
     ("two-variable-sum", EXAMPLE + """
 def sumIsFour : Eq Nat (scSum Nat plusN zero oneN twoN sumInputs) fourN :=
   refl Nat fourN

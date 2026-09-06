@@ -4,6 +4,9 @@ A standalone formalization of the algebraic core of the LFKN sumcheck
 protocol. The first milestone is checked: honest transcripts satisfy every
 round consistency equation and the final evaluation equation, for every
 finite challenge sequence.
+The finite-carrier foundation is also checked: enumerations carry
+exhaustiveness and uniqueness proofs, and decidable predicate counts are
+bounded by the carrier's cardinality.
 
 ## Check
 
@@ -14,7 +17,7 @@ python3 test/check.py
 Run from this directory. The runner uses the checker named by `TOT` when
 that variable is set. Otherwise it uses the sibling checkout at
 `../tot/_build/default/bin/tot.exe` and stops with a message when that
-file is absent. The runner concatenates the foundation and proof source
+file is absent. The runner concatenates the foundation and proof sources
 in temporary files and checks with `--no-prelude --no-axioms`. It prints the
 checker SHA-256 so validation identifies the binary actually used. No
 compiler rebuild is required when a built checker exists.
@@ -27,6 +30,18 @@ compiler rebuild is required when a built checker exists.
   distinguished endpoints, challenge list, and function `g : List F -> F`,
   the honest transcript satisfies `scAccept` for the true initial sum.
   The proof is structural induction on the challenge list.
+- `ScFinite`: a carrier packaged with an exhaustive, duplicate-free list
+  and decidable equality. `scEnumerates` and `scEnumerationUnique` expose
+  its evidence; `scDecEq` exposes its equality decision procedure.
+- `scBitFinite`: a concrete two-element carrier with checked enumeration
+  evidence. `scDuplicateImpossible` refutes adjacent duplicate entries in
+  any enumeration satisfying `scNoDup`.
+- `scCountBound` and `scFiniteCountBound`: counting a decidable predicate
+  never exceeds the list length or finite-carrier cardinality, respectively.
+  Counts use proof-carrying decisions. The bound is proved by structural
+  induction, using the inductive natural order `ScLe`.
+- `scAddZeroRight`, `scAddAssoc`, `scLeRefl`, and `scLeWeaken`: basic natural
+  arithmetic and order lemmas for subsequent counting arguments.
 
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
@@ -51,24 +66,33 @@ adaptive strategy definition, probability model, or soundness theorem.
 Arbitrary transcripts also do not yet carry an externally enforced round
 count; the honest construction uses exactly the supplied challenges.
 
-The standalone foundation declares only `Nat`, `List`, `Pair`, and indexed
-propositional `Eq`. There are no postulates, admitted proofs, or placeholder
+The standalone foundation declares `Nat`, `List`, `Pair`, and indexed
+propositional `Eq`. The finite and counting modules add empty and unit types,
+disjunction, decisions, finite-carrier evidence, a two-element carrier, and
+natural order. There are no postulates, admitted proofs, or placeholder
 theorems. Checking trusts tot's current elaborator and kernel; this project
 does not establish their metatheoretic soundness. The default prelude is
 excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all seven checks passed with checker SHA-256
+On 2026-09-06, all thirteen checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
-the reference checker. The checks also pass on current tot builds from
-uncommitted working trees. Those hashes are not recorded here, because no
-commit reproduces them.
+the reference checker. To select an existing build explicitly, run
+`TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The seven checks:
+The thirteen checks:
 
 - Generic completeness checks without a prelude or axioms.
+- Finite-carrier and counting proofs check, including empty-carrier
+  cardinality, two-element cardinality, empty-list counts, all/none counts,
+  each singleton predicate, and a concrete count bound.
+- A membership proof for an omitted element is rejected.
+- A forged uniqueness proof for duplicate entries is rejected.
+- A false equality decision is rejected.
+- An incorrect predicate count is rejected.
+- A false natural-order bound is rejected.
 - For `g(x,y) = x+y` over naturals, the Boolean-cube sum is four and the
   honest transcript for challenges `[2,1]` is accepted.
 - The completeness proof term is rejected at initial claim zero. The type
@@ -88,11 +112,15 @@ not show that the false statements are unprovable.
 
 Naturals in the concrete regression example test the algebraic equations;
 they are not presented as a finite field.
+The two-element carrier likewise has no field structure yet. Empty carriers
+are permitted by `ScFinite`; a uniform probability interpretation will need
+nonemptiness. Enumeration independence of counts and arithmetic for products
+and powers are still future work.
 
 ## Next milestones
 
-1. Define finite carriers with exhaustive, duplicate-free enumeration,
-   decidable equality, arithmetic and order lemmas for finite counts.
+1. Extend the checked finite-carrier foundation with product/power counts,
+   enumeration independence, and the arithmetic needed for soundness.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -106,7 +134,8 @@ they are not presented as a finite field.
    soundness error at most `n*d/|F|`. If intermediate results take a root
    bound as a hypothesis, label them conditional until it is discharged.
 
-Sources: `src/Foundation.tot`, `src/Completeness.tot`.
+Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
+`src/Counting.tot`.
 
 ## License
 

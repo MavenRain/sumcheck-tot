@@ -1,0 +1,82 @@
+-- Natural counts and an order bound for every decidable predicate.
+reducible def rec scAdd : Nat -> Nat -> Nat := fun n m => match n with
+  | zero => m | succ k => succ (scAdd k m) end
+
+def scSuccCong : (0 n : Nat) -> (0 m : Nat) -> Eq Nat n m ->
+    Eq Nat (succ n) (succ m) :=
+  fun n m h => scTransport Nat n m (fun k => Eq Nat (succ n) (succ k))
+    h (refl Nat (succ n))
+
+def rec scAddZeroRight : (n : Nat) -> Eq Nat (scAdd n zero) n :=
+  fun n => match n as k return Eq Nat (scAdd k zero) k with
+  | zero => refl Nat zero
+  | succ k => scSuccCong (scAdd k zero) k (scAddZeroRight k)
+  end
+
+def rec scAddAssoc : (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    Eq Nat (scAdd (scAdd n m) k) (scAdd n (scAdd m k)) :=
+  fun n m k => match n as a return
+      Eq Nat (scAdd (scAdd a m) k) (scAdd a (scAdd m k)) with
+  | zero => refl Nat (scAdd m k)
+  | succ a => scSuccCong (scAdd (scAdd a m) k) (scAdd a (scAdd m k))
+      (scAddAssoc a m k)
+  end
+
+data ScLe : Nat -> Nat -> Type 0 :=
+  | scLeZero : (0 n : Nat) -> ScLe zero n
+  | scLeSucc : (0 n : Nat) -> (0 m : Nat) -> ScLe n m -> ScLe (succ n) (succ m)
+
+def rec scLeRefl : (n : Nat) -> ScLe n n :=
+  fun n => match n as k return ScLe k k with
+  | zero => scLeZero zero
+  | succ k => scLeSucc k k (scLeRefl k)
+  end
+
+def rec scLeWeaken : (0 n : Nat) -> (0 m : Nat) -> ScLe n m -> ScLe n (succ m) :=
+  fun n m h => match h as e in ScLe a b return ScLe a (succ b) with
+  | scLeZero k => scLeZero (succ k)
+  | scLeSucc a b rest => scLeSucc a (succ b) (scLeWeaken a b rest)
+  end
+
+reducible def scTally : (0 P : Type 0) -> ScDec P -> Nat -> Nat :=
+  fun P decision n => match decision with
+  | scYes proof => succ n | scNo refute => n end
+
+reducible def rec scCount : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    ((x : A) -> ScDec (P x)) -> List A -> Nat :=
+  fun A P decide xs => match xs with
+  | nil => zero
+  | cons x rest => scTally (P x) (decide x) (scCount A P decide rest)
+  end
+
+def scTallyBound : (0 P : Type 0) -> (decision : ScDec P) ->
+    (n : Nat) -> (m : Nat) -> ScLe n m -> ScLe (scTally P decision n) (succ m) :=
+  fun P decision n m h => match decision as d return
+      ScLe (scTally P d n) (succ m) with
+  | scYes proof => scLeSucc n m h
+  | scNo refute => scLeWeaken n m h
+  end
+
+def rec scCountBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) ->
+    ScLe (scCount A P decide xs) (scLength A xs) :=
+  fun A P decide xs => match xs as ys return
+      ScLe (scCount A P decide ys) (scLength A ys) with
+  | nil => scLeZero zero
+  | cons x rest => scTallyBound (P x) (decide x)
+      (scCount A P decide rest) (scLength A rest) (scCountBound A P decide rest)
+  end
+
+reducible def scFiniteCount : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    ((x : A) -> ScDec (P x)) -> ScFinite A -> Nat :=
+  fun A P decide finite => scCount A P decide (scElements A finite)
+
+def scFiniteCountBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (finite : ScFinite A) ->
+    ScLe (scFiniteCount A P decide finite) (scCardinality A finite) :=
+  fun A P decide finite => scCountBound A P decide (scElements A finite)
+
+check scAddZeroRight
+check scAddAssoc
+check scCountBound
+check scFiniteCountBound

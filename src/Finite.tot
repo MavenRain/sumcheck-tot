@@ -1,0 +1,116 @@
+-- Finite carriers carry enumeration evidence; no field structure is assumed.
+data ScEmpty : Type 0 :=
+data ScUnit : Type 0 := | scUnit : ScUnit
+data ScEither (0 A : Type 0) (0 B : Type 0) : Type 0 :=
+  | scLeft : A -> ScEither A B
+  | scRight : B -> ScEither A B
+data ScDec (0 P : Type 0) : Type 0 :=
+  | scYes : P -> ScDec P
+  | scNo : (P -> ScEmpty) -> ScDec P
+
+def scTransport : (0 A : Type 0) -> (0 x : A) -> (0 y : A) ->
+    (0 P : A -> Type 0) -> Eq A x y -> P x -> P y :=
+  fun A x y P h px => match h as e in Eq z return P z with
+  | refl => px
+  end
+
+reducible def rec scMember : (0 A : Type 0) -> A -> List A -> Type 0 :=
+  fun A x xs => match xs with
+  | nil => ScEmpty
+  | cons y rest => ScEither (Eq A x y) (scMember A x rest)
+  end
+
+reducible def rec scNoDup : (0 A : Type 0) -> List A -> Type 0 :=
+  fun A xs => match xs with
+  | nil => ScUnit
+  | cons x rest => Pair (scMember A x rest -> ScEmpty) (scNoDup A rest)
+  end
+
+data ScFinite (0 A : Type 0) : Type 0 :=
+  | scFinite : (xs : List A) -> ((x : A) -> scMember A x xs) ->
+      scNoDup A xs -> ((x : A) -> (y : A) -> ScDec (Eq A x y)) -> ScFinite A
+
+reducible def scElements : (0 A : Type 0) -> ScFinite A -> List A :=
+  fun A finite => match finite with
+  | scFinite xs complete unique decide => xs
+  end
+
+reducible def scCardinality : (0 A : Type 0) -> ScFinite A -> Nat :=
+  fun A finite => scLength A (scElements A finite)
+
+def scEnumerates : (0 A : Type 0) -> (finite : ScFinite A) ->
+    (x : A) -> scMember A x (scElements A finite) :=
+  fun A finite => match finite as f return
+      (x : A) -> scMember A x (scElements A f) with
+  | scFinite xs complete unique decide => complete
+  end
+
+def scEnumerationUnique : (0 A : Type 0) -> (finite : ScFinite A) ->
+    scNoDup A (scElements A finite) :=
+  fun A finite => match finite as f return scNoDup A (scElements A f) with
+  | scFinite xs complete unique decide => unique
+  end
+
+reducible def scDecEq : (0 A : Type 0) -> ScFinite A ->
+    (x : A) -> (y : A) -> ScDec (Eq A x y) :=
+  fun A finite => match finite with
+  | scFinite xs complete unique decide => decide
+  end
+
+def scDuplicateImpossible : (0 A : Type 0) -> (x : A) -> (rest : List A) ->
+    scNoDup A (cons A x (cons A x rest)) -> ScEmpty :=
+  fun A x rest unique => match unique with
+  | pair absent tailUnique =>
+      absent (scLeft (Eq A x x) (scMember A x rest) (refl A x))
+  end
+
+-- A concrete finite carrier for enumeration regressions, not a field claim.
+data ScBit : Type 0 := | scLow : ScBit | scHigh : ScBit
+reducible def scLowWitness : ScBit -> Type 0 := fun x => match x with
+  | scLow => ScUnit | scHigh => ScEmpty end
+reducible def scHighWitness : ScBit -> Type 0 := fun x => match x with
+  | scLow => ScEmpty | scHigh => ScUnit end
+def scLowNeHigh : Eq ScBit scLow scHigh -> ScEmpty :=
+  fun h => scTransport ScBit scLow scHigh scLowWitness h scUnit
+def scHighNeLow : Eq ScBit scHigh scLow -> ScEmpty :=
+  fun h => scTransport ScBit scHigh scLow scHighWitness h scUnit
+
+reducible def scBitDecEq : (x : ScBit) -> (y : ScBit) -> ScDec (Eq ScBit x y) :=
+  fun x y => match x as a return ScDec (Eq ScBit a y) with
+  | scLow => match y as b return ScDec (Eq ScBit scLow b) with
+    | scLow => scYes _ (refl ScBit scLow)
+    | scHigh => scNo _ scLowNeHigh
+    end
+  | scHigh => match y as b return ScDec (Eq ScBit scHigh b) with
+    | scLow => scNo _ scHighNeLow
+    | scHigh => scYes _ (refl ScBit scHigh)
+    end
+  end
+
+reducible def scBits : List ScBit :=
+  cons ScBit scLow (cons ScBit scHigh (nil ScBit))
+def scBitsComplete : (x : ScBit) -> scMember ScBit x scBits :=
+  fun x => match x as a return scMember ScBit a scBits with
+  | scLow => scLeft (Eq ScBit scLow scLow)
+      (scMember ScBit scLow (cons ScBit scHigh (nil ScBit))) (refl ScBit scLow)
+  | scHigh => scRight (Eq ScBit scHigh scLow)
+      (scMember ScBit scHigh (cons ScBit scHigh (nil ScBit)))
+      (scLeft (Eq ScBit scHigh scHigh) ScEmpty (refl ScBit scHigh))
+  end
+def scBitsUnique : scNoDup ScBit scBits :=
+  pair (scMember ScBit scLow (cons ScBit scHigh (nil ScBit)) -> ScEmpty)
+    (scNoDup ScBit (cons ScBit scHigh (nil ScBit)))
+    (fun member => match member with
+      | scLeft h => scLowNeHigh h
+      | scRight impossible => impossible
+      end)
+    (pair (ScEmpty -> ScEmpty) ScUnit (fun impossible => impossible) scUnit)
+reducible def scBitFinite : ScFinite ScBit :=
+  scFinite ScBit scBits scBitsComplete scBitsUnique scBitDecEq
+
+check scBitsComplete
+check scBitsUnique
+check scBitFinite
+check scEnumerates
+check scEnumerationUnique
+check scDuplicateImpossible
