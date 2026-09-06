@@ -13,7 +13,8 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
-                  "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot"))
+                  "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
+                  "EnumerationIndependent.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -522,8 +523,180 @@ reducible def bitAcceptCount : ScBit -> Nat := fun claim =>
   scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh twoN adaptiveBits bitGoal claim
 """
 
+ENUMERATION_CHECKS = """
+def scSumOverZeroAt : (0 A : Type 0) -> (xs : List A) ->
+    Eq Nat (scSumOver A (fun x => zero) xs) zero :=
+  scSumOverZero
+def scSumOverAddAt : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    (xs : List A) -> Eq Nat (scSumOver A (fun x => scAdd (f x) (g x)) xs)
+      (scAdd (scSumOver A f xs) (scSumOver A g xs)) :=
+  scSumOverAdd
+def scSumOverSwapAt : (0 A : Type 0) -> (0 B : Type 0) ->
+    (weight : A -> B -> Nat) -> (xs : List A) -> (ys : List B) ->
+    Eq Nat (scSumOver A (fun x => scSumOver B (weight x) ys) xs)
+      (scSumOver B (fun y => scSumOver A (fun x => weight x y) xs) ys) :=
+  scSumOverSwap
+def scDiagonalSymAt : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (y : A) ->
+    Eq Nat (scDiagonalWeight A equal weight x y) (scDiagonalWeight A equal weight y x) :=
+  scDiagonalSym
+def scDiagonalAbsentAt : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) ->
+    (scMember A x xs -> ScEmpty) ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) zero :=
+  scDiagonalAbsent
+def scDiagonalPresentAt : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) ->
+    scNoDup A xs -> scMember A x xs ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) (weight x) :=
+  scDiagonalPresent
+def scFiniteSumIndependentAt : (0 A : Type 0) -> (weight : A -> Nat) ->
+    (fa : ScFinite A) -> (fb : ScFinite A) ->
+    Eq Nat (scSumOver A weight (scElements A fa))
+      (scSumOver A weight (scElements A fb)) :=
+  scFiniteSumIndependent
+def scCountAsSumAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) ->
+    Eq Nat (scCount A P decide xs)
+      (scSumOver A (fun x => scTally (P x) (decide x) zero) xs) :=
+  scCountAsSum
+def scFiniteCountIndependentAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (P x)) ->
+    (fa : ScFinite A) -> (fb : ScFinite A) ->
+    Eq Nat (scFiniteCount A P dp fa) (scFiniteCount A P dq fb) :=
+  scFiniteCountIndependent
+def scCardinalityIndependentAt : (0 A : Type 0) -> (fa : ScFinite A) ->
+    (fb : ScFinite A) -> Eq Nat (scCardinality A fa) (scCardinality A fb) :=
+  scCardinalityIndependent
+def scAcceptingCountIndependentAt : (0 F : Type 0) ->
+    (fa : ScFinite F) -> (fb : ScFinite F) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (strategy : ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scAcceptingCount F fa plus lo hi n strategy g claim)
+      (scAcceptingCount F fb plus lo hi n strategy g claim) :=
+  scAcceptingCountIndependent
+"""
+
+ENUMERATION_EXAMPLE = ACCEPTANCE_EXAMPLE + """
+reducible def enumerationEmpty : ScFinite ScEmpty :=
+  scFinite ScEmpty (nil ScEmpty) (fun x => match x with end) scUnit
+    (fun x y => match x with end)
+
+reducible def reversedBits : List ScBit :=
+  cons ScBit scHigh (cons ScBit scLow (nil ScBit))
+def reversedComplete : (x : ScBit) -> scMember ScBit x reversedBits :=
+  fun x => match x as y return scMember ScBit y reversedBits with
+  | scLow => scRight (Eq ScBit scLow scHigh)
+      (scMember ScBit scLow (cons ScBit scLow (nil ScBit)))
+      (scLeft (Eq ScBit scLow scLow) ScEmpty (refl ScBit scLow))
+  | scHigh => scLeft (Eq ScBit scHigh scHigh)
+      (scMember ScBit scHigh (cons ScBit scLow (nil ScBit))) (refl ScBit scHigh)
+  end
+def reversedUnique : scNoDup ScBit reversedBits :=
+  pair (scMember ScBit scHigh (cons ScBit scLow (nil ScBit)) -> ScEmpty)
+    (scNoDup ScBit (cons ScBit scLow (nil ScBit)))
+    (fun member => match member with
+    | scLeft same => scHighNeLow same | scRight impossible => impossible end)
+    (pair (ScEmpty -> ScEmpty) ScUnit (fun impossible => impossible) scUnit)
+reducible def reversedDecision : (x : ScBit) -> (y : ScBit) -> ScDec (Eq ScBit x y) :=
+  fun x y => match scBitDecEq y x with
+  | scYes same => scYes (Eq ScBit x y) (scEqSym ScBit y x same)
+  | scNo different => scNo (Eq ScBit x y)
+      (fun same => different (scEqSym ScBit x y same))
+  end
+reducible def reversedFinite : ScFinite ScBit :=
+  scFinite ScBit reversedBits reversedComplete reversedUnique reversedDecision
+reducible def bitWeight : ScBit -> Nat := fun x => match x with
+  | scLow => oneN | scHigh => twoN end
+def reversedSum : Eq Nat (scSumOver ScBit bitWeight scBits)
+    (scSumOver ScBit bitWeight reversedBits) :=
+  scFiniteSumIndependent ScBit bitWeight scBitFinite reversedFinite
+def weightedTotal : Eq Nat (scSumOver ScBit bitWeight reversedBits) (succ twoN) :=
+  refl Nat (succ twoN)
+def reversedCardinality : Eq Nat (scCardinality ScBit scBitFinite)
+    (scCardinality ScBit reversedFinite) :=
+  scCardinalityIndependent ScBit scBitFinite reversedFinite
+def reversedCount : Eq Nat
+    (scFiniteCount ScBit (fun x => Eq ScBit x scHigh)
+      (fun x => scBitDecEq x scHigh) scBitFinite)
+    (scFiniteCount ScBit (fun x => Eq ScBit x scHigh)
+      (fun x => reversedDecision x scHigh) reversedFinite) :=
+  scFiniteCountIndependent ScBit (fun x => Eq ScBit x scHigh)
+    (fun x => scBitDecEq x scHigh) (fun x => reversedDecision x scHigh)
+    scBitFinite reversedFinite
+def reversedAcceptingCount : Eq Nat (bitAcceptCount scLow)
+    (scAcceptingCount ScBit reversedFinite bitPlus scLow scHigh twoN
+      adaptiveBits bitGoal scLow) :=
+  scAcceptingCountIndependent ScBit scBitFinite reversedFinite bitPlus scLow scHigh
+    twoN adaptiveBits bitGoal scLow
+def reversedAcceptingTotal : Eq Nat
+    (scAcceptingCount ScBit reversedFinite bitPlus scLow scHigh twoN
+      adaptiveBits bitGoal scLow) twoN := refl Nat twoN
+def emptySumIndependent : Eq Nat
+    (scSumOver ScEmpty (fun x => zero) (scElements ScEmpty enumerationEmpty))
+    (scSumOver ScEmpty (fun x => zero) (scElements ScEmpty enumerationEmpty)) :=
+  scFiniteSumIndependent ScEmpty (fun x => zero) enumerationEmpty enumerationEmpty
+def duplicateSum : Eq Nat
+    (scSumOver ScBit bitWeight (cons ScBit scHigh reversedBits)) (succ fourN) :=
+  refl Nat (succ fourN)
+def absentWeight : Eq Nat (scSumOver ScBit
+    (scDiagonalWeight ScBit scBitDecEq bitWeight scHigh)
+    (cons ScBit scLow (nil ScBit))) zero :=
+  scDiagonalAbsent ScBit scBitDecEq bitWeight scHigh (cons ScBit scLow (nil ScBit))
+    (fun member => match member with
+    | scLeft same => scHighNeLow same | scRight impossible => impossible end)
+def presentWeight : Eq Nat (scSumOver ScBit
+    (scDiagonalWeight ScBit scBitDecEq bitWeight scHigh) scBits) twoN :=
+  scDiagonalPresent ScBit scBitDecEq bitWeight scHigh scBits
+    scBitsUnique (scBitsComplete scHigh)
+def zeroRoundIndependent : Eq Nat
+    (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh zero scUnit bitGoal scLow)
+    (scAcceptingCount ScBit reversedFinite bitPlus scLow scHigh zero scUnit bitGoal scLow) :=
+  scAcceptingCountIndependent ScBit scBitFinite reversedFinite bitPlus scLow scHigh
+    zero scUnit bitGoal scLow
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("enumeration-independent", ENUMERATION_CHECKS, None),
+    ("enumeration-independent-examples", ENUMERATION_EXAMPLE, None),
+    ("diagonal-missing-uniqueness", """
+def missingUnique : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) ->
+    scMember A x xs ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) (weight x) :=
+  scDiagonalPresent
+""", "mismatch"),
+    ("diagonal-missing-membership", """
+def missingMember : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) -> scNoDup A xs ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) (weight x) :=
+  scDiagonalPresent
+""", "mismatch"),
+    ("diagonal-missing-absence", """
+def missingAbsent : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) zero :=
+  scDiagonalAbsent
+""", "mismatch"),
+    ("enumeration-different-predicates", """
+def differentPredicates : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (fa : ScFinite A) -> (fb : ScFinite A) ->
+    Eq Nat (scFiniteCount A P dp fa) (scFiniteCount A Q dq fb) :=
+  fun A P Q dp dq fa fb => scFiniteCountIndependent A P dp dq fa fb
+""", "mismatch"),
+    ("enumeration-duplicates-change-sum", ENUMERATION_EXAMPLE + """
+def duplicatesIgnored : Eq Nat
+    (scSumOver ScBit bitWeight (cons ScBit scHigh reversedBits))
+    (scSumOver ScBit bitWeight scBits) := reversedSum
+""", "mismatch"),
     ("acceptance-counting", ACCEPTANCE_CHECKS, None),
     ("acceptance-count-examples", ACCEPTANCE_EXAMPLE + """
 def adaptiveHalf : Eq Nat (bitAcceptCount scLow) twoN := refl Nat twoN

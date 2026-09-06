@@ -237,15 +237,33 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all sixty-seven checks passed with checker SHA-256
+On 2026-09-06, all eighty-one checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The sixty-seven checks:
+The eighty-one checks:
 
 - All generic proofs check without a prelude or axioms.
+- All eleven enumeration-independence and supporting sum theorems check at
+  abstract arguments.
+- Enumeration examples reverse the carrier order and equality decision,
+  preserve weighted sums, predicate counts, and adaptive acceptance counts,
+  and cover an empty carrier, zero rounds, and repeated list entries.
+- A diagonal sum theorem without uniqueness is rejected.
+- A diagonal sum theorem without membership is rejected.
+- A zero diagonal sum theorem without absence evidence is rejected.
+- Count independence used with different predicates is rejected.
+- Ignoring a duplicated entry in a weighted sum is rejected.
+- All seven acceptance-counting theorems check at abstract arguments.
+- Acceptance examples cover honest, partial, rejected, and zero-round counts
+  and the exact continuation-count decomposition.
+- The count decomposition without first-round equality is rejected.
+- A zero-round zero count without terminal falsity is rejected.
+- A rejected-round zero count without round refutation is rejected.
+- The honest count theorem used at an arbitrary claim is rejected.
+- Ignoring continuation rejection in the accepting count is rejected.
 - All four strategy theorems check at abstract arguments.
 - Strategy examples cover two adaptive branches, exact transcript contents,
   length and challenge order, the honest-transcript bridge, honest acceptance,
@@ -350,7 +368,11 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check sixty-seven deliberate mutations in memory. All were caught.
+suite and check eighty-five deliberate mutations in memory. All were caught.
+Eleven mutations replace the enumeration-independence and supporting sum
+theorems with reflexive equalities while retaining their premises. Generic
+consumers catch nine; the abstract enumeration checks catch the cardinality
+and accepting-count weakenings.
 Four strategy mutations consistently weaken the public theorem statements
 and replace their proofs. The abstract strategy checks reject the length,
 challenge-order, and trace-bridge weakenings; the honest-count theorem now
@@ -403,8 +425,9 @@ multiplicity for arbitrary input lists. For duplicate-free inputs, the
 uniqueness theorems now justify interpreting the entries as distinct outcomes.
 Fixed-length words are packaged through `ScVector`, rather than the type
 of all lists. Vector predicate counts now equal the corresponding list-word counts for
-predicates pulled back through the conversion. Independence from the choice
-of finite enumeration remains future work.
+predicates pulled back through the conversion. Finite sums, cardinalities,
+predicate counts, and accepting-vector counts are independent of the choice
+of finite enumeration.
 The word count bound
 is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
@@ -437,9 +460,30 @@ with reflexive statements and proofs. The suite must reject each weakening.
 These results concern algebraic acceptance only. They do not impose degree
 bounds or establish a soundness error bound.
 
+## Enumeration independence
+
+`src/EnumerationIndependent.tot` proves that any two `ScFinite A` packages
+give the same sum for a fixed natural-valued weight. The proof exchanges two
+finite sums of diagonal weights: equality contributes the entry's weight,
+and inequality contributes zero. Completeness supplies every entry and
+uniqueness ensures that each contributes exactly once. Empty carriers are
+allowed, with no field laws or extensionality axioms required.
+
+`scFiniteCountIndependent` derives predicate-count equality while allowing
+both the enumeration and decision procedure to change.
+`scCardinalityIndependent` specializes to counting every element.
+`scAcceptingCountIndependent` applies the result to challenge vectors, so a
+fixed adaptive strategy has the same accepting count under either carrier
+package. The strategy, target, initial claim, and verifier operations remain
+fixed in this theorem.
+
+The supporting sum lemmas retain multiplicity on arbitrary lists. Only the
+finite-package results use complete, duplicate-free enumerations. This
+milestone does not add degree constraints or a soundness theorem.
+
 ## Next milestones
 
-1. Establish independence from the finite enumeration. Predicate monotonicity,
+1. Finite enumeration independence is proved. Predicate monotonicity,
    decision independence, append additivity, the binary union bound, product
    fiber decomposition, and uniform fiber bounds are proved. The arithmetic
    recurrence and its scaled closed form are proved conditionally on initial
@@ -463,7 +507,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
-`src/AcceptanceCounting.tot`.
+`src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`.
 
 ## License
 

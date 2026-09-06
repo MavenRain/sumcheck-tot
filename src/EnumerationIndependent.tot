@@ -1,0 +1,242 @@
+-- Finite sums and predicate counts do not depend on enumeration order.
+def rec scSumOverZero : (0 A : Type 0) -> (xs : List A) ->
+    Eq Nat (scSumOver A (fun x => zero) xs) zero :=
+  fun A xs => match xs as ys return
+      Eq Nat (scSumOver A (fun x => zero) ys) zero with
+  | nil => refl Nat zero
+  | cons x rest => scSumOverZero A rest
+  end
+
+def rec scSumOverAdd : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    (xs : List A) -> Eq Nat (scSumOver A (fun x => scAdd (f x) (g x)) xs)
+      (scAdd (scSumOver A f xs) (scSumOver A g xs)) :=
+  fun A f g xs => match xs as ys return
+      Eq Nat (scSumOver A (fun x => scAdd (f x) (g x)) ys)
+        (scAdd (scSumOver A f ys) (scSumOver A g ys)) with
+  | nil => refl Nat zero
+  | cons x rest => (scEqTrans Nat (scAdd (scAdd (f x) (g x)) (scSumOver A (fun x => scAdd (f x) (g
+      x)) rest)) (scAdd (f x) (scAdd (scSumOver A f rest) (scAdd (g x) (scSumOver A g rest))))
+      (scAdd (scAdd (f x) (scSumOver A f rest)) (scAdd (g x) (scSumOver A g rest))) (scEqTrans Nat
+      (scAdd (scAdd (f x) (g x)) (scSumOver A (fun x => scAdd (f x) (g x)) rest)) (scAdd (f x)
+      (scAdd (g x) (scAdd (scSumOver A f rest) (scSumOver A g rest)))) (scAdd (f x) (scAdd
+      (scSumOver A f rest) (scAdd (g x) (scSumOver A g rest)))) (scEqTrans Nat (scAdd (scAdd (f x)
+      (g x)) (scSumOver A (fun x => scAdd (f x) (g x)) rest)) (scAdd (scAdd (f x) (g x)) (scAdd
+      (scSumOver A f rest) (scSumOver A g rest))) (scAdd (f x) (scAdd (g x) (scAdd (scSumOver A f
+      rest) (scSumOver A g rest)))) (scCong Nat Nat (scAdd (scAdd (f x) (g x))) (scSumOver A (fun
+      x => scAdd (f x) (g x)) rest) (scAdd (scSumOver A f rest) (scSumOver A g rest))
+      (scSumOverAdd A f g rest)) (scAddAssoc (f x) (g x) (scAdd (scSumOver A f rest) (scSumOver A
+      g rest)))) (scCong Nat Nat (scAdd (f x)) (scAdd (g x) (scAdd (scSumOver A f rest) (scSumOver
+      A g rest))) (scAdd (scSumOver A f rest) (scAdd (g x) (scSumOver A g rest))) (scAddSwap (g x)
+      (scSumOver A f rest) (scSumOver A g rest)))) (scEqSym Nat (scAdd (scAdd (f x) (scSumOver A f
+      rest)) (scAdd (g x) (scSumOver A g rest))) (scAdd (f x) (scAdd (scSumOver A f rest) (scAdd
+      (g x) (scSumOver A g rest)))) (scAddAssoc (f x) (scSumOver A f rest) (scAdd (g x) (scSumOver
+      A g rest)))))
+  end
+
+-- Exchange two finite sums without equality of functions or any axioms.
+def rec scSumOverSwap : (0 A : Type 0) -> (0 B : Type 0) ->
+    (weight : A -> B -> Nat) -> (xs : List A) -> (ys : List B) ->
+    Eq Nat (scSumOver A (fun x => scSumOver B (weight x) ys) xs)
+      (scSumOver B (fun y => scSumOver A (fun x => weight x y) xs) ys) :=
+  fun A B weight xs ys => match xs as zs return
+      Eq Nat (scSumOver A (fun x => scSumOver B (weight x) ys) zs)
+        (scSumOver B (fun y => scSumOver A (fun x => weight x y) zs) ys) with
+  | nil => scEqSym Nat (scSumOver B (fun y => zero) ys) zero (scSumOverZero B ys)
+  | cons x rest => scEqTrans Nat (scAdd (scSumOver B (weight x) ys) (scSumOver A (fun x =>
+      scSumOver B (weight x) ys) rest)) (scAdd (scSumOver B (weight x) ys) (scSumOver B (fun y =>
+      scSumOver A (fun x => weight x y) rest) ys)) (scSumOver B (fun y => scAdd (weight x y)
+      (scSumOver A (fun x => weight x y) rest)) ys)
+      (scCong Nat Nat (scAdd (scSumOver B (weight x) ys)) (scSumOver A (fun x => scSumOver B
+          (weight x) ys) rest) (scSumOver B (fun y => scSumOver A (fun x => weight x y) rest) ys)
+        (scSumOverSwap A B weight rest ys))
+      (scEqSym Nat (scSumOver B (fun y => scAdd (weight x y) (scSumOver A (fun x => weight x y)
+          rest)) ys) (scAdd (scSumOver B (weight x) ys) (scSumOver B (fun y => scSumOver A (fun x
+          => weight x y) rest) ys))
+        (scSumOverAdd B (weight x) (fun y => scSumOver A (fun z => weight z y) rest) ys))
+  end
+
+reducible def scDiagonalWeight : (0 A : Type 0) ->
+    ((x : A) -> (y : A) -> ScDec (Eq A x y)) -> (A -> Nat) -> A -> A -> Nat :=
+  fun A equal weight x y => match equal x y with
+  | scYes same => weight x
+  | scNo different => zero
+  end
+
+def scDiagonalSym : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (y : A) ->
+    Eq Nat (scDiagonalWeight A equal weight x y) (scDiagonalWeight A equal weight y x) :=
+  fun A equal weight x y => match equal x y as d return
+      Eq Nat (match d with | scYes same => weight x | scNo different => zero end)
+        (scDiagonalWeight A equal weight y x) with
+  | scYes same => match equal y x as e return Eq Nat (weight x)
+      (match e with | scYes same => weight y | scNo different => zero end) with
+    | scYes reverse => scCong A Nat weight x y same
+    | scNo different => match different (scEqSym A x y same) with end
+    end
+  | scNo different => match equal y x as e return Eq Nat zero
+      (match e with | scYes same => weight y | scNo different => zero end) with
+    | scYes reverse => match different (scEqSym A y x reverse) with end
+    | scNo reject => refl Nat zero
+    end
+  end
+
+def rec scDiagonalAbsent : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) ->
+    (scMember A x xs -> ScEmpty) ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) zero :=
+  fun A equal weight x xs => match xs as ys return
+      (scMember A x ys -> ScEmpty) ->
+      Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) ys) zero with
+  | nil => fun absent => refl Nat zero
+  | cons y rest => fun absent => match equal x y as d return
+      Eq Nat (scAdd
+        (match d with | scYes same => weight x | scNo different => zero end)
+        (scSumOver A (scDiagonalWeight A equal weight x) rest)) zero with
+    | scYes same => match absent (scLeft (Eq A x y) (scMember A x rest) same) with end
+    | scNo different => scDiagonalAbsent A equal weight x rest
+        (fun member => absent (scRight (Eq A x y) (scMember A x rest) member))
+    end
+  end
+
+-- A present entry contributes its weight exactly once in a unique list.
+def rec scDiagonalPresent : (0 A : Type 0) ->
+    (equal : (x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    (weight : A -> Nat) -> (x : A) -> (xs : List A) ->
+    scNoDup A xs -> scMember A x xs ->
+    Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) xs) (weight x) :=
+  fun A equal weight x xs => match xs as ys return
+      scNoDup A ys -> scMember A x ys ->
+      Eq Nat (scSumOver A (scDiagonalWeight A equal weight x) ys) (weight x) with
+  | nil => fun unique impossible => match impossible with end
+  | cons y rest => fun unique member => match unique with
+    | pair absent tail => match equal x y as d return
+        Eq Nat (scAdd
+          (match d with | scYes same => weight x | scNo different => zero end)
+          (scSumOver A (scDiagonalWeight A equal weight x) rest)) (weight x) with
+      | scYes same => scEqTrans Nat (scAdd (weight x) (scSumOver A (scDiagonalWeight A equal
+          weight x) rest))
+          (scAdd (weight x) zero) (weight x)
+          (scCong Nat Nat (scAdd (weight x)) (scSumOver A (scDiagonalWeight A equal weight x)
+              rest) zero
+            (scDiagonalAbsent A equal weight x rest
+              (fun inside => absent
+                (scTransport A x y (fun z => scMember A z rest) same inside))))
+          (scAddZeroRight (weight x))
+      | scNo different => scDiagonalPresent A equal weight x rest tail
+          (match member with
+          | scLeft same => match different same with end
+          | scRight inside => inside
+          end)
+      end
+    end
+  end
+
+-- Expand into diagonal rows, exchange sums, and collapse each column.
+-- Each collapse uses completeness and uniqueness of the opposite enumeration.
+def scFiniteSumIndependent : (0 A : Type 0) -> (weight : A -> Nat) ->
+    (fa : ScFinite A) -> (fb : ScFinite A) ->
+    Eq Nat (scSumOver A weight (scElements A fa))
+      (scSumOver A weight (scElements A fb)) :=
+  fun A weight fa fb => scEqTrans Nat (scSumOver A weight (scElements A fa)) (scSumOver A (fun x
+      => scSumOver A (scDiagonalWeight A (scDecEq A fa) weight x) (scElements A fb)) (scElements A
+      fa)) (scSumOver A weight (scElements A fb))
+    (scEqSym Nat (scSumOver A (fun x => scSumOver A (scDiagonalWeight A (scDecEq A fa) weight x)
+        (scElements A fb)) (scElements A fa)) (scSumOver A weight (scElements A fa))
+        (scSumOverCong A (fun x => scSumOver A (scDiagonalWeight A (scDecEq A fa) weight x)
+        (scElements A fb)) weight
+      (fun x => scDiagonalPresent A (scDecEq A fa) weight x (scElements A fb)
+        (scEnumerationUnique A fb) (scEnumerates A fb x)) (scElements A fa)))
+    (scEqTrans Nat (scSumOver A (fun x => scSumOver A (scDiagonalWeight A (scDecEq A fa) weight x)
+        (scElements A fb)) (scElements A fa)) (scSumOver A (fun y => scSumOver A (fun x =>
+        scDiagonalWeight A (scDecEq A fa) weight x y) (scElements A fa)) (scElements A fb))
+        (scSumOver A weight (scElements A fb))
+      (scSumOverSwap A A (scDiagonalWeight A (scDecEq A fa) weight) (scElements A fa) (scElements
+          A fb))
+      (scSumOverCong A (fun y => scSumOver A (fun x => scDiagonalWeight A (scDecEq A fa) weight x
+          y) (scElements A fa)) weight
+        (fun y => scEqTrans Nat (scSumOver A (fun x => scDiagonalWeight A (scDecEq A fa) weight x
+            y) (scElements A fa)) (scSumOver A (scDiagonalWeight A (scDecEq A fa) weight y)
+            (scElements A fa)) (weight y)
+          (scSumOverCong A (fun x => scDiagonalWeight A (scDecEq A fa) weight x y)
+            (scDiagonalWeight A (scDecEq A fa) weight y)
+            (fun x => scDiagonalSym A (scDecEq A fa) weight x y) (scElements A fa))
+          (scDiagonalPresent A (scDecEq A fa) weight y (scElements A fa)
+            (scEnumerationUnique A fa) (scEnumerates A fa y))) (scElements A fb)))
+
+def rec scCountAsSum : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) ->
+    Eq Nat (scCount A P decide xs)
+      (scSumOver A (fun x => scTally (P x) (decide x) zero) xs) :=
+  fun A P decide xs => match xs as ys return
+      Eq Nat (scCount A P decide ys)
+        (scSumOver A (fun x => scTally (P x) (decide x) zero) ys) with
+  | nil => refl Nat zero
+  | cons x rest => scEqTrans Nat
+      (scTally (P x) (decide x) (scCount A P decide rest)) (scTally (P x) (decide x) (scSumOver A
+          (fun y => scTally (P y) (decide y) zero) rest))
+      (scAdd (scTally (P x) (decide x) zero) (scSumOver A (fun y => scTally (P y) (decide y) zero)
+          rest))
+      (scCong Nat Nat (scTally (P x) (decide x)) (scCount A P decide rest) (scSumOver A (fun y =>
+          scTally (P y) (decide y) zero) rest)
+        (scCountAsSum A P decide rest))
+      (scTallyAdd (P x) (decide x) zero (scSumOver A (fun y => scTally (P y) (decide y) zero)
+          rest))
+  end
+
+def scFiniteCountIndependent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (P x)) ->
+    (fa : ScFinite A) -> (fb : ScFinite A) ->
+    Eq Nat (scFiniteCount A P dp fa) (scFiniteCount A P dq fb) :=
+  fun A P dp dq fa fb => scEqTrans Nat (scFiniteCount A P dp fa) (scSumOver A (fun x => scTally (P
+      x) (dp x) zero) (scElements A fa)) (scFiniteCount A P dq fb)
+    (scCountAsSum A P dp (scElements A fa))
+    (scEqTrans Nat (scSumOver A (fun x => scTally (P x) (dp x) zero) (scElements A fa)) (scSumOver
+        A (fun x => scTally (P x) (dp x) zero) (scElements A fb)) (scFiniteCount A P dq fb)
+      (scFiniteSumIndependent A (fun x => scTally (P x) (dp x) zero) fa fb)
+      (scEqTrans Nat (scSumOver A (fun x => scTally (P x) (dp x) zero) (scElements A fb))
+          (scFiniteCount A P dp fb) (scFiniteCount A P dq fb)
+        (scEqSym Nat (scFiniteCount A P dp fb) (scSumOver A (fun x => scTally (P x) (dp x) zero)
+            (scElements A fb)) (scCountAsSum A P dp (scElements A fb)))
+        (scCountDecisionIndependent A P dp dq (scElements A fb))))
+
+def scCardinalityIndependent : (0 A : Type 0) -> (fa : ScFinite A) ->
+    (fb : ScFinite A) -> Eq Nat (scCardinality A fa) (scCardinality A fb) :=
+  fun A fa fb => scEqTrans Nat (scCardinality A fa) (scFiniteCount A (fun x => ScUnit) (fun x =>
+      scYes ScUnit scUnit) fa) (scCardinality A fb)
+    (scEqSym Nat (scFiniteCount A (fun x => ScUnit) (fun x => scYes ScUnit scUnit) fa)
+        (scCardinality A fa) (scCountSatisfied A (fun x => ScUnit)
+      (fun x => scYes ScUnit scUnit) (fun x => scUnit) (scElements A fa)))
+    (scEqTrans Nat (scFiniteCount A (fun x => ScUnit) (fun x => scYes ScUnit scUnit) fa)
+        (scFiniteCount A (fun x => ScUnit) (fun x => scYes ScUnit scUnit) fb) (scCardinality A fb)
+      (scFiniteCountIndependent A (fun x => ScUnit)
+        (fun x => scYes ScUnit scUnit) (fun x => scYes ScUnit scUnit) fa fb)
+      (scCountSatisfied A (fun x => ScUnit)
+        (fun x => scYes ScUnit scUnit) (fun x => scUnit) (scElements A fb)))
+
+-- The equality decisions and vector enumerations may both change.
+def scAcceptingCountIndependent : (0 F : Type 0) ->
+    (fa : ScFinite F) -> (fb : ScFinite F) -> (plus : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (n : Nat) -> (strategy : ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) ->
+    Eq Nat (scAcceptingCount F fa plus lo hi n strategy g claim)
+      (scAcceptingCount F fb plus lo hi n strategy g claim) :=
+  fun F fa fb plus lo hi n strategy g claim =>
+    scFiniteCountIndependent (ScVector F n)
+      (scStrategyAccept F plus lo hi n strategy g claim)
+      (scStrategyAcceptDec F fa plus lo hi n strategy g claim)
+      (scStrategyAcceptDec F fb plus lo hi n strategy g claim)
+      (scVectorFinite F fa n) (scVectorFinite F fb n)
+
+check scAcceptingCountIndependent
+check scSumOverZero
+check scSumOverAdd
+check scSumOverSwap
+check scDiagonalSym
+check scDiagonalAbsent
+check scDiagonalPresent
+check scFiniteSumIndependent
+check scCountAsSum
+check scFiniteCountIndependent
+check scCardinalityIndependent
