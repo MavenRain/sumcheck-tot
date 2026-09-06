@@ -1,0 +1,181 @@
+-- Membership elimination and uniqueness of disjoint enumerations.
+def rec scMemberAppendSplit : (0 A : Type 0) -> (x : A) ->
+    (xs : List A) -> (ys : List A) -> scMember A x (scAppend A xs ys) ->
+    ScEither (scMember A x xs) (scMember A x ys) :=
+  fun A x xs ys member => (match xs as zs return
+      scMember A x (scAppend A zs ys) ->
+      ScEither (scMember A x zs) (scMember A x ys) with
+  | nil => fun evidence => scRight ScEmpty (scMember A x ys) evidence
+  | cons z rest => fun evidence => match evidence with
+    | scLeft h => scLeft (scMember A x (cons A z rest)) (scMember A x ys)
+        (scLeft (Eq A x z) (scMember A x rest) h)
+    | scRight h => match scMemberAppendSplit A x rest ys h with
+      | scLeft left => scLeft (scMember A x (cons A z rest)) (scMember A x ys)
+          (scRight (Eq A x z) (scMember A x rest) left)
+      | scRight right => scRight (scMember A x (cons A z rest)) (scMember A x ys) right
+      end
+    end
+  end) member
+
+def rec scMemberMapElim : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Type 0) -> (f : A -> B) -> (y : B) -> (xs : List A) ->
+    ((x : A) -> scMember A x xs -> Eq B y (f x) -> P) ->
+    scMember B y (scMap A B f xs) -> P :=
+  fun A B P f y xs use member => (match xs as zs return
+      ((x : A) -> scMember A x zs -> Eq B y (f x) -> P) ->
+      scMember B y (scMap A B f zs) -> P with
+  | nil => fun step impossible => match impossible with end
+  | cons x rest => fun step evidence => match evidence with
+    | scLeft h => step x (scLeft (Eq A x x) (scMember A x rest) (refl A x)) h
+    | scRight h => scMemberMapElim A B P f y rest
+        (fun z inside equal => step z (scRight (Eq A z x) (scMember A z rest) inside) equal) h
+    end
+  end) use member
+
+def rec scMemberExpandElim : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Type 0) -> (block : A -> List B) -> (y : B) -> (xs : List A) ->
+    ((x : A) -> scMember A x xs -> scMember B y (block x) -> P) ->
+    scMember B y (scExpand A B block xs) -> P :=
+  fun A B P block y xs use member => (match xs as zs return
+      ((x : A) -> scMember A x zs -> scMember B y (block x) -> P) ->
+      scMember B y (scExpand A B block zs) -> P with
+  | nil => fun step impossible => match impossible with end
+  | cons x rest => fun step evidence =>
+      match scMemberAppendSplit B y (block x) (scExpand A B block rest) evidence with
+      | scLeft h => step x (scLeft (Eq A x x) (scMember A x rest) (refl A x)) h
+      | scRight h => scMemberExpandElim A B P block y rest
+          (fun z inside inBlock => step z
+            (scRight (Eq A z x) (scMember A z rest) inside) inBlock) h
+      end
+  end) use member
+
+def rec scNoDupAppend : (0 A : Type 0) -> (xs : List A) -> (ys : List A) ->
+    scNoDup A xs -> scNoDup A ys ->
+    ((x : A) -> scMember A x xs -> scMember A x ys -> ScEmpty) ->
+    scNoDup A (scAppend A xs ys) :=
+  fun A xs ys left right disjoint => (match xs as zs return
+      scNoDup A zs ->
+      ((x : A) -> scMember A x zs -> scMember A x ys -> ScEmpty) ->
+      scNoDup A (scAppend A zs ys) with
+  | nil => fun unique apart => right
+  | cons x rest => fun unique apart => match unique with
+    | pair absent tail => pair
+        (scMember A x (scAppend A rest ys) -> ScEmpty)
+        (scNoDup A (scAppend A rest ys))
+        (fun member => match scMemberAppendSplit A x rest ys member with
+          | scLeft h => absent h
+          | scRight h => apart x (scLeft (Eq A x x) (scMember A x rest) (refl A x)) h
+          end)
+        (scNoDupAppend A rest ys tail right
+          (fun z member other => apart z
+            (scRight (Eq A z x) (scMember A z rest) member) other))
+    end
+  end) left disjoint
+
+def rec scNoDupMap : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    ((x : A) -> (y : A) -> Eq B (f x) (f y) -> Eq A x y) ->
+    (xs : List A) -> scNoDup A xs -> scNoDup B (scMap A B f xs) :=
+  fun A B f injective xs unique => (match xs as zs return
+      scNoDup A zs -> scNoDup B (scMap A B f zs) with
+  | nil => fun evidence => scUnit
+  | cons x rest => fun evidence => match evidence with
+    | pair absent tail => pair
+        (scMember B (f x) (scMap A B f rest) -> ScEmpty)
+        (scNoDup B (scMap A B f rest))
+        (fun member => scMemberMapElim A B ScEmpty f (f x) rest
+          (fun y inside equal => absent
+            (scTransport A y x (fun z => scMember A z rest)
+              (scEqSym A x y (injective x y equal)) inside)) member)
+        (scNoDupMap A B f injective rest tail)
+    end
+  end) unique
+
+-- Blocks may overlap only when their source labels are equal.
+def rec scNoDupExpand : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> ((x : A) -> scNoDup B (block x)) ->
+    ((x : A) -> (y : A) -> (z : B) ->
+      scMember B z (block x) -> scMember B z (block y) -> Eq A x y) ->
+    (xs : List A) -> scNoDup A xs -> scNoDup B (scExpand A B block xs) :=
+  fun A B block uniqueBlock overlap xs unique => (match xs as zs return
+      scNoDup A zs -> scNoDup B (scExpand A B block zs) with
+  | nil => fun evidence => scUnit
+  | cons x rest => fun evidence => match evidence with
+    | pair absent tail => scNoDupAppend B (block x) (scExpand A B block rest)
+        (uniqueBlock x) (scNoDupExpand A B block uniqueBlock overlap rest tail)
+        (fun z first second => scMemberExpandElim A B ScEmpty block z rest
+          (fun y inside inBlock => absent
+            (scTransport A y x (fun a => scMember A a rest)
+              (scEqSym A x y (overlap x y z first inBlock)) inside)) second)
+    end
+  end) unique
+
+-- A grid encoding preserves both coordinates, hence has no collisions.
+def scGridUnique : (0 A : Type 0) -> (0 B : Type 0) -> (0 C : Type 0) ->
+    (encode : A -> B -> C) ->
+    ((x : A) -> (y : A) -> (u : B) -> (v : B) ->
+      Eq C (encode x u) (encode y v) -> Eq A x y) ->
+    ((x : A) -> (u : B) -> (v : B) ->
+      Eq C (encode x u) (encode x v) -> Eq B u v) ->
+    (xs : List A) -> (ys : List B) -> scNoDup A xs -> scNoDup B ys ->
+    scNoDup C (scExpand A C (fun x => scMap B C (encode x) ys) xs) :=
+  fun A B C encode first second xs ys left right =>
+    scNoDupExpand A C (fun x => scMap B C (encode x) ys)
+      (fun x => scNoDupMap B C (encode x) (second x) ys right)
+      (fun x y z inX inY => scMemberMapElim B C (Eq A x y) (encode x) z ys
+        (fun u memberU equalU => scMemberMapElim B C (Eq A x y) (encode y) z ys
+          (fun v memberV equalV => first x y u v
+            (scEqTrans C (encode x u) z (encode y v)
+              (scEqSym C z (encode x u) equalU) equalV)) inY) inX)
+      xs left
+
+reducible def scFirst : (0 A : Type 0) -> (0 B : Type 0) -> Pair A B -> A :=
+  fun A B p => match p with | pair x y => x end
+reducible def scSecond : (0 A : Type 0) -> (0 B : Type 0) -> Pair A B -> B :=
+  fun A B p => match p with | pair x y => y end
+
+def scProductComplete : (0 A : Type 0) -> (0 B : Type 0) ->
+    (xs : List A) -> (ys : List B) -> (x : A) -> (y : B) ->
+    scMember A x xs -> scMember B y ys ->
+    scMember (Pair A B) (pair A B x y) (scProduct A B xs ys) :=
+  fun A B xs ys x y left right => scMemberExpand A (Pair A B)
+    (fun a => scMap B (Pair A B) (fun b => pair A B a b) ys)
+    x (pair A B x y) xs left
+    (scMemberMap B (Pair A B) (fun b => pair A B x b) y ys right)
+
+def scProductUnique : (0 A : Type 0) -> (0 B : Type 0) ->
+    (xs : List A) -> (ys : List B) -> scNoDup A xs -> scNoDup B ys ->
+    scNoDup (Pair A B) (scProduct A B xs ys) :=
+  fun A B xs ys left right => scGridUnique A B (Pair A B) (fun x y => pair A B x y)
+    (fun x y u v h => scCong (Pair A B) A (scFirst A B)
+      (pair A B x u) (pair A B y v) h)
+    (fun x u v h => scCong (Pair A B) B (scSecond A B)
+      (pair A B x u) (pair A B x v) h) xs ys left right
+
+-- The fallback makes head total; it is never used on encoded cons cells.
+reducible def scHeadOr : (0 A : Type 0) -> A -> List A -> A :=
+  fun A fallback xs => match xs with | nil => fallback | cons x rest => x end
+reducible def scTail : (0 A : Type 0) -> List A -> List A :=
+  fun A xs => match xs with | nil => nil A | cons x rest => rest end
+
+def rec scWordsUnique : (0 A : Type 0) -> (alphabet : List A) ->
+    scNoDup A alphabet -> (n : Nat) -> scNoDup (List A) (scWords A alphabet n) :=
+  fun A alphabet unique n => match n as k return
+      scNoDup (List A) (scWords A alphabet k) with
+  | zero => pair (ScEmpty -> ScEmpty) ScUnit (fun impossible => impossible) scUnit
+  | succ k => scGridUnique A (List A) (List A) (fun x word => cons A x word)
+      (fun x y u v h => scCong (List A) A (scHeadOr A x)
+        (cons A x u) (cons A y v) h)
+      (fun x u v h => scCong (List A) (List A) (scTail A)
+        (cons A x u) (cons A x v) h)
+      alphabet (scWords A alphabet k) unique (scWordsUnique A alphabet unique k)
+  end
+
+def scFiniteWordsUnique : (0 A : Type 0) -> (finite : ScFinite A) ->
+    (n : Nat) -> scNoDup (List A) (scWords A (scElements A finite) n) :=
+  fun A finite n => scWordsUnique A (scElements A finite)
+    (scEnumerationUnique A finite) n
+
+check scProductComplete
+check scProductUnique
+check scWordsUnique
+check scFiniteWordsUnique

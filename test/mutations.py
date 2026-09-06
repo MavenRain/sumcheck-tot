@@ -1,4 +1,4 @@
-"""Check that product and word proofs catch deliberate source mutations."""
+"""Check that enumeration and counting proofs catch deliberate source mutations."""
 import tempfile
 
 import check
@@ -22,7 +22,21 @@ MUTATIONS = [
      "Pair ScUnit (scAll A P rest)", 1),
     ("all-drops-tail-evidence", "Pair (P x) (scAll A P rest)",
      "Pair (P x) ScUnit", 1),
+    ("unique-drops-head-obligation",
+     "Pair (scMember A x rest -> ScEmpty) (scNoDup A rest)",
+     "Pair ScUnit (scNoDup A rest)", 1),
+    ("unique-drops-tail-obligation",
+     "Pair (scMember A x rest -> ScEmpty) (scNoDup A rest)",
+     "Pair (scMember A x rest -> ScEmpty) ScUnit", 1),
+    ("map-injectivity-weakened", "Eq B (f x) (f y) -> Eq A x y",
+     "Eq B (f x) (f y) -> Eq A x x", 1),
+    ("block-separation-weakened",
+     "scMember B z (block x) -> scMember B z (block y) -> Eq A x y",
+     "scMember B z (block x) -> scMember B z (block y) -> Eq A x x", 1),
 ]
+
+# Removing a refutation function first fails when an existing proof applies it.
+MUTATION_DIAGNOSTICS = {"unique-drops-head-obligation": "not a function type: scunit"}
 
 
 def main():
@@ -38,7 +52,8 @@ def main():
                     result = check.run_case(directory, case, extra)
                     if not check.accepted(result, expected):
                         diagnostic = (result.stdout + result.stderr).lower()
-                        if expected is not None or result.returncode != 1 or "mismatch" not in diagnostic:
+                        wanted = MUTATION_DIAGNOSTICS.get(name, "mismatch")
+                        if expected is not None or result.returncode != 1 or wanted not in diagnostic:
                             raise SystemExit(f"unexpected mutant failure {name}/{case}:\n"
                                              f"{result.stdout}\n{result.stderr}")
                         print(f"CAUGHT {name}: {case}")

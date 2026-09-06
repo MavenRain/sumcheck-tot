@@ -10,7 +10,7 @@ DEFAULT_TOT = ROOT.parent / "tot" / "_build" / "default" / "bin" / "tot.exe"
 TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
-                  "Products.tot", "WordEnumeration.tot"))
+                  "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -28,6 +28,55 @@ reducible def honestN : ScTrace Nat :=
 # status 1 and print that string in its diagnostic.
 CASES = [
     ("generic-proofs", "", None),
+    ("enumeration-uniqueness", EXAMPLE + """
+def productMember : scMember (Pair ScBit ScBit) (pair ScBit ScBit scHigh scLow)
+    (scProduct ScBit ScBit scBits scBits) :=
+  scProductComplete ScBit ScBit scBits scBits scHigh scLow
+    (scBitsComplete scHigh) (scBitsComplete scLow)
+def productUnique : scNoDup (Pair ScBit ScBit) (scProduct ScBit ScBit scBits scBits) :=
+  scProductUnique ScBit ScBit scBits scBits scBitsUnique scBitsUnique
+def emptyLeftUnique : scNoDup (Pair ScEmpty ScBit)
+    (scProduct ScEmpty ScBit (nil ScEmpty) scBits) :=
+  scProductUnique ScEmpty ScBit (nil ScEmpty) scBits scUnit scBitsUnique
+def emptyRightUnique : scNoDup (Pair ScBit ScEmpty)
+    (scProduct ScBit ScEmpty scBits (nil ScEmpty)) :=
+  scProductUnique ScBit ScEmpty scBits (nil ScEmpty) scBitsUnique scUnit
+def wordsUnique : scNoDup (List ScBit) (scWords ScBit scBits twoN) :=
+  scFiniteWordsUnique ScBit scBitFinite twoN
+def zeroWordsUnique : scNoDup (List ScEmpty) (scWords ScEmpty (nil ScEmpty) zero) :=
+  scWordsUnique ScEmpty (nil ScEmpty) scUnit zero
+def emptyWordsUnique : scNoDup (List ScEmpty) (scWords ScEmpty (nil ScEmpty) twoN) :=
+  scWordsUnique ScEmpty (nil ScEmpty) scUnit twoN
+-- Uniqueness exposes a usable refutation, including nonadjacent duplicates.
+def lowLowNotInTail : scMember (List ScBit)
+    (cons ScBit scLow (cons ScBit scLow (nil ScBit)))
+    (scTail (List ScBit) (scWords ScBit scBits twoN)) -> ScEmpty :=
+  scFirst
+    (scMember (List ScBit) (cons ScBit scLow (cons ScBit scLow (nil ScBit)))
+      (scTail (List ScBit) (scWords ScBit scBits twoN)) -> ScEmpty)
+    (scNoDup (List ScBit) (scTail (List ScBit) (scWords ScBit scBits twoN))) wordsUnique
+""", None),
+    ("uniqueness-missing-head-obligation", """
+def forgedUnique : scNoDup ScBit scBits :=
+  pair ScUnit (scNoDup ScBit (cons ScBit scHigh (nil ScBit))) scUnit
+    (pair (ScEmpty -> ScEmpty) ScUnit (fun impossible => impossible) scUnit)
+""", "mismatch"),
+    ("uniqueness-missing-tail-obligation", """
+def forgedUniqueTail : scNoDup ScBit scBits :=
+  pair (scMember ScBit scLow (cons ScBit scHigh (nil ScBit)) -> ScEmpty) ScUnit
+    (fun member => match member with
+      | scLeft h => scLowNeHigh h | scRight impossible => impossible end) scUnit
+""", "mismatch"),
+    ("map-noninjective", """
+def forgedMapUnique : scNoDup ScBit (scMap ScBit ScBit (fun x => scLow) scBits) :=
+  scNoDupMap ScBit ScBit (fun x => scLow)
+    (fun x y h => refl ScBit x) scBits scBitsUnique
+""", "mismatch"),
+    ("append-overlapping", """
+def forgedAppendUnique : scNoDup ScBit (scAppend ScBit scBits scBits) :=
+  scNoDupAppend ScBit scBits scBits scBitsUnique scBitsUnique
+    (fun x left right => scUnit)
+""", "mismatch"),
     ("word-enumeration-evidence", EXAMPLE + """
 reducible def highLow : List ScBit := cons ScBit scHigh (cons ScBit scLow (nil ScBit))
 def highLowMember : scMember (List ScBit) highLow (scWords ScBit scBits twoN) :=
@@ -46,6 +95,10 @@ def repeatedMember : scMember (List ScBit) highOnly
     (pair (scMember ScBit scHigh repeatedAlphabet) ScUnit
       (scLeft (Eq ScBit scHigh scHigh)
         (scMember ScBit scHigh (cons ScBit scHigh (nil ScBit))) (refl ScBit scHigh)) scUnit)
+def repeatedLength : Eq Nat (scLength ScBit highOnly) oneN :=
+  scWordLength ScBit repeatedAlphabet oneN highOnly repeatedMember
+def emptyWordLength : Eq Nat (scLength ScEmpty (nil ScEmpty)) zero :=
+  scWordLength ScEmpty (nil ScEmpty) zero (nil ScEmpty) emptyWordMember
 -- Membership in the tail exercises equality transport and recursive evidence.
 def tailLength : Eq Nat (scLength ScBit highLow) twoN :=
   scAllMember (List ScBit) (fun w => Eq Nat (scLength ScBit w) twoN)
