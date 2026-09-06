@@ -1,0 +1,67 @@
+-- Finite products retain enumeration evidence and decide both coordinates.
+def scPairCong : (0 A : Type 0) -> (0 B : Type 0) ->
+    (x : A) -> (y : A) -> (u : B) -> (v : B) ->
+    Eq A x y -> Eq B u v -> Eq (Pair A B) (pair A B x u) (pair A B y v) :=
+  fun A B x y u v first second =>
+    scEqTrans (Pair A B) (pair A B x u) (pair A B y u) (pair A B y v)
+      (scCong A (Pair A B) (fun a => pair A B a u) x y first)
+      (scCong B (Pair A B) (fun b => pair A B y b) u v second)
+
+reducible def scPairDecEq : (0 A : Type 0) -> (0 B : Type 0) ->
+    ((x : A) -> (y : A) -> ScDec (Eq A x y)) ->
+    ((u : B) -> (v : B) -> ScDec (Eq B u v)) ->
+    (p : Pair A B) -> (q : Pair A B) -> ScDec (Eq (Pair A B) p q) :=
+  fun A B decideA decideB p q => match p as left return
+      ScDec (Eq (Pair A B) left q) with
+  | pair x u => match q as right return
+      ScDec (Eq (Pair A B) (pair A B x u) right) with
+    | pair y v => match decideA x y with
+      | scYes first => match decideB u v with
+        | scYes second => scYes (Eq (Pair A B) (pair A B x u) (pair A B y v)) (scPairCong A B x y u v first second)
+        | scNo different => scNo (Eq (Pair A B) (pair A B x u) (pair A B y v)) (fun equal => different
+            (scCong (Pair A B) B (scSecond A B)
+              (pair A B x u) (pair A B y v) equal))
+        end
+      | scNo different => scNo (Eq (Pair A B) (pair A B x u) (pair A B y v)) (fun equal => different
+          (scCong (Pair A B) A (scFirst A B)
+            (pair A B x u) (pair A B y v) equal))
+      end
+    end
+  end
+
+reducible def scProductFinite : (0 A : Type 0) -> (0 B : Type 0) ->
+    ScFinite A -> ScFinite B -> ScFinite (Pair A B) :=
+  fun A B left right => scFinite (Pair A B)
+    (scProduct A B (scElements A left) (scElements B right))
+    (fun p => match p as q return scMember (Pair A B) q
+        (scProduct A B (scElements A left) (scElements B right)) with
+      | pair x y => scProductComplete A B (scElements A left) (scElements B right)
+          x y (scEnumerates A left x) (scEnumerates B right y)
+      end)
+    (scProductUnique A B (scElements A left) (scElements B right)
+      (scEnumerationUnique A left) (scEnumerationUnique B right))
+    (scPairDecEq A B (scDecEq A left) (scDecEq B right))
+
+def scProductCardinality : (0 A : Type 0) -> (0 B : Type 0) ->
+    (left : ScFinite A) -> (right : ScFinite B) ->
+    Eq Nat (scCardinality (Pair A B) (scProductFinite A B left right))
+      (scMul (scCardinality A left) (scCardinality B right)) :=
+  fun A B left right => scProductLength A B (scElements A left) (scElements B right)
+
+def scProductCountBound : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : Pair A B -> Type 0) -> (decide : (p : Pair A B) -> ScDec (P p)) ->
+    (left : ScFinite A) -> (right : ScFinite B) ->
+    ScLe (scFiniteCount (Pair A B) P decide (scProductFinite A B left right))
+      (scMul (scCardinality A left) (scCardinality B right)) :=
+  fun A B P decide left right => scTransport Nat
+    (scCardinality (Pair A B) (scProductFinite A B left right))
+    (scMul (scCardinality A left) (scCardinality B right))
+    (fun bound => ScLe
+      (scFiniteCount (Pair A B) P decide (scProductFinite A B left right)) bound)
+    (scProductCardinality A B left right)
+    (scFiniteCountBound (Pair A B) P decide (scProductFinite A B left right))
+
+check scPairDecEq
+check scProductFinite
+check scProductCardinality
+check scProductCountBound

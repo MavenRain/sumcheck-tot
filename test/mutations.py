@@ -7,6 +7,12 @@ import check
 # Replacements apply to the in-memory concatenation, never to source files.
 # Challenge mutations preserve enumeration cardinality but corrupt word contents.
 MUTATIONS = [
+    ("pair-decision-ignores-first", "match decideA x y with",
+     "match decideA x x with", 1),
+    ("pair-decision-ignores-second", "match decideB u v with",
+     "match decideB u u with", 1),
+    ("pair-congruence-drops-second-equality", "Eq A x y -> Eq B u v ->",
+     "Eq A x y -> Eq B u u ->", 1),
     ("multiplication-base", "| zero => zero | succ k => scAdd m (scMul k m) end",
      "| zero => m | succ k => scAdd m (scMul k m) end", 1),
     ("power-base", "| zero => succ zero | succ k => scMul base (scPow base k) end",

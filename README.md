@@ -13,6 +13,8 @@ Every generated word has the requested length, and every word whose entries
 belong to the alphabet occurs in the enumeration at its length.
 Products preserve membership, and products and challenge-word enumerations
 are duplicate-free when their input enumerations are duplicate-free.
+Finite products now package this evidence together with decidable pair equality
+and a checked product cardinality.
 
 ## Check
 
@@ -78,6 +80,14 @@ compiler rebuild is required when a built checker exists.
   includes zero rounds and empty alphabets, without requiring nonemptiness
   or decidable equality.
 
+- `scPairCong` and `scPairDecEq`: coordinate equalities construct pair equality,
+  and coordinate decisions give a decision for pair equality. Either unequal
+  coordinate supplies a refutation through the corresponding projection.
+- `scProductFinite`: two finite carriers give a finite pair carrier with complete,
+  unique enumeration and decidable equality, including empty factors.
+- `scProductCardinality` and `scProductCountBound`: the packaged product has
+  cardinality `|A| * |B|`, which bounds every decidable predicate count.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -111,15 +121,22 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all twenty-six checks passed with checker SHA-256
+On 2026-09-06, all thirty-one checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The twenty-six checks:
+The thirty-one checks:
 
 - All generic proofs check without a prelude or axioms.
+- Finite product packaging checks membership, uniqueness, cardinality, empty
+  factors, all/none/singleton predicate counts, and a product count bound.
+  All sixteen equality decisions on pairs of bits compute the expected tally.
+- An incorrect packaged product cardinality is rejected.
+- Forged pair equality ignoring the second coordinate is rejected.
+- Forged pair equality ignoring the first coordinate is rejected.
+- An incorrect packaged product predicate count is rejected.
 - Product membership and uniqueness, word uniqueness, empty product factors,
   empty alphabets at zero and positive rounds, and extraction of a usable
   nonmembership refutation from word uniqueness check.
@@ -164,12 +181,13 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check twelve deliberate mutations in memory. All twelve were caught:
+suite and check fifteen deliberate mutations in memory. All fifteen were caught:
 incorrect multiplication and power base cases, dropped append entries,
 missing zero-round words, omitted challenges, doubled challenges, and dropped
 head or tail obligations in pointwise evidence, dropped head or tail
 uniqueness obligations, weakened map injectivity, and weakened block
-separation. All are caught by generic
+separation, pair decisions ignoring either coordinate, and pair congruence
+with a weakened second-coordinate equality. All are caught by generic
 proofs. Omitting or doubling challenges preserves enumeration cardinality,
 but now fails the word-length proof; exact word-content regressions also remain.
 
@@ -180,8 +198,8 @@ are permitted by `ScFinite`; a uniform probability interpretation will need
 nonemptiness. Product and word size formulas count list entries with
 multiplicity for arbitrary input lists. For duplicate-free inputs, the
 uniqueness theorems now justify interpreting the entries as distinct outcomes.
-Packaging products as `ScFinite` and fixed-length words as a finite carrier,
-and proving enumeration independence of counts, remain future work. All lists
+Packaging fixed-length words as a finite carrier and proving enumeration
+independence of counts remain future work. All lists
 over a nonempty carrier are not a finite carrier; the word package must
 restrict the carrier to the specified length.
 The word count bound
@@ -189,7 +207,7 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 ## Next milestones
 
-1. Package finite products and fixed-length words; establish enumeration
+1. Package fixed-length words; establish enumeration
    independence and the remaining arithmetic needed for soundness.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
@@ -206,7 +224,7 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
-`src/EnumerationUnique.tot`.
+`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`.
 
 ## License
 

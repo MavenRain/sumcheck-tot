@@ -10,7 +10,8 @@ DEFAULT_TOT = ROOT.parent / "tot" / "_build" / "default" / "bin" / "tot.exe"
 TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
-                  "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot"))
+                  "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
+                  "FiniteProducts.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -23,11 +24,80 @@ reducible def challengesN : List Nat := cons Nat twoN (cons Nat oneN (nil Nat))
 reducible def honestN : ScTrace Nat :=
   scHonestTrace Nat plusN zero oneN challengesN sumInputs
 """
+PRODUCT_EXAMPLE = EXAMPLE + """
+reducible def bitProduct : ScFinite (Pair ScBit ScBit) :=
+  scProductFinite ScBit ScBit scBitFinite scBitFinite
+reducible def emptyProductFactor : ScFinite ScEmpty :=
+  scFinite ScEmpty (nil ScEmpty) (fun x => match x with end) scUnit
+    (fun x y => match x with end)
+reducible def targetPair : Pair ScBit ScBit := pair ScBit ScBit scHigh scLow
+"""
+PRODUCT_CHECKS = PRODUCT_EXAMPLE + """
+def packagedCardinality : Eq Nat (scCardinality (Pair ScBit ScBit) bitProduct) fourN :=
+  scProductCardinality ScBit ScBit scBitFinite scBitFinite
+def packagedMember : scMember (Pair ScBit ScBit) targetPair
+    (scElements (Pair ScBit ScBit) bitProduct) :=
+  scEnumerates (Pair ScBit ScBit) bitProduct targetPair
+def packagedUnique : scNoDup (Pair ScBit ScBit) (scElements (Pair ScBit ScBit) bitProduct) :=
+  scEnumerationUnique (Pair ScBit ScBit) bitProduct
+def leftEmptyCardinality : Eq Nat (scCardinality (Pair ScEmpty ScBit)
+    (scProductFinite ScEmpty ScBit emptyProductFactor scBitFinite)) zero :=
+  scProductCardinality ScEmpty ScBit emptyProductFactor scBitFinite
+def rightEmptyCardinality : Eq Nat (scCardinality (Pair ScBit ScEmpty)
+    (scProductFinite ScBit ScEmpty scBitFinite emptyProductFactor)) zero :=
+  scProductCardinality ScBit ScEmpty scBitFinite emptyProductFactor
+def singletonPairCount : Eq Nat (scFiniteCount (Pair ScBit ScBit)
+    (fun p => Eq (Pair ScBit ScBit) p targetPair)
+    (fun p => scDecEq (Pair ScBit ScBit) bitProduct p targetPair) bitProduct) oneN :=
+  refl Nat oneN
+def productAllCount : Eq Nat (scFiniteCount (Pair ScBit ScBit)
+    (fun p => ScUnit) (fun p => scYes ScUnit scUnit) bitProduct) fourN := refl Nat fourN
+def productNoneCount : Eq Nat (scFiniteCount (Pair ScBit ScBit)
+    (fun p => ScEmpty) (fun p => scNo ScEmpty (fun h => h)) bitProduct) zero := refl Nat zero
+def packagedCountBound : ScLe (scFiniteCount (Pair ScBit ScBit)
+    (fun p => Eq (Pair ScBit ScBit) p targetPair)
+    (fun p => scDecEq (Pair ScBit ScBit) bitProduct p targetPair) bitProduct) fourN :=
+  scProductCountBound ScBit ScBit (fun p => Eq (Pair ScBit ScBit) p targetPair)
+    (fun p => scDecEq (Pair ScBit ScBit) bitProduct p targetPair) scBitFinite scBitFinite
+"""
+# Exhaust every equality branch through the packaged decision procedure.
+for i, (x, u) in enumerate((a, b) for a in ("scLow", "scHigh") for b in ("scLow", "scHigh")):
+    for j, (y, v) in enumerate((a, b) for a in ("scLow", "scHigh") for b in ("scLow", "scHigh")):
+        left, right = f"(pair ScBit ScBit {x} {u})", f"(pair ScBit ScBit {y} {v})"
+        expected = "oneN" if i == j else "zero"
+        PRODUCT_CHECKS += f"""
+def pairDecision{i}{j} : Eq Nat
+    (scTally (Eq (Pair ScBit ScBit) {left} {right})
+      (scDecEq (Pair ScBit ScBit) bitProduct {left} {right}) zero) {expected} :=
+  refl Nat {expected}
+"""
+
 # A case is (name, source appended to BASE, expected diagnostic).
 # None: the checker must accept. A string: the checker must exit with
 # status 1 and print that string in its diagnostic.
 CASES = [
     ("generic-proofs", "", None),
+    ("finite-products", PRODUCT_CHECKS, None),
+    ("product-wrong-cardinality", PRODUCT_EXAMPLE + """
+def badCardinality : Eq Nat (scCardinality (Pair ScBit ScBit) bitProduct) twoN :=
+  refl Nat twoN
+""", "mismatch"),
+    ("product-equality-ignores-second", PRODUCT_EXAMPLE + """
+def forgedPairEquality : ScDec (Eq (Pair ScBit ScBit)
+    (pair ScBit ScBit scLow scLow) (pair ScBit ScBit scLow scHigh)) :=
+  scYes _ (refl (Pair ScBit ScBit) (pair ScBit ScBit scLow scLow))
+""", "mismatch"),
+    ("product-equality-ignores-first", PRODUCT_EXAMPLE + """
+def forgedPairEquality : ScDec (Eq (Pair ScBit ScBit)
+    (pair ScBit ScBit scLow scLow) (pair ScBit ScBit scHigh scLow)) :=
+  scYes _ (refl (Pair ScBit ScBit) (pair ScBit ScBit scLow scLow))
+""", "mismatch"),
+    ("product-wrong-predicate-count", PRODUCT_EXAMPLE + """
+def badPairCount : Eq Nat (scFiniteCount (Pair ScBit ScBit)
+    (fun p => Eq (Pair ScBit ScBit) p targetPair)
+    (fun p => scDecEq (Pair ScBit ScBit) bitProduct p targetPair) bitProduct) twoN :=
+  refl Nat twoN
+""", "mismatch"),
     ("enumeration-uniqueness", EXAMPLE + """
 def productMember : scMember (Pair ScBit ScBit) (pair ScBit ScBit scHigh scLow)
     (scProduct ScBit ScBit scBits scBits) :=
