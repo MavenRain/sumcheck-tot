@@ -9,6 +9,8 @@ exhaustiveness and uniqueness proofs, and decidable predicate counts are
 bounded by the carrier's cardinality.
 List products and challenge-word enumerations now have checked size formulas
 `|xs| * |ys|` and `|alphabet|^n`, with a predicate-count bound for words.
+Every generated word has the requested length, and every word whose entries
+belong to the alphabet occurs in the enumeration at its length.
 
 ## Check
 
@@ -52,6 +54,15 @@ compiler rebuild is required when a built checker exists.
   for an empty alphabet, so the counting convention is `0^0 = 1`.
 - `scWordCountBound`: any decidable predicate holds at most `|alphabet|^n`
   times in that list. With `scElements F finite`, the bound is `|F|^n`.
+- `scAllMember`, `scAllAppend`, `scAllMap`, and `scAllExpand`: pointwise
+  evidence can be extracted by membership and preserved through list operations.
+- `scWordsAllLengths` and `scWordLength`: every member of `scWords A alphabet n`
+  has length `n`, including when the alphabet is empty or contains duplicates.
+- `scWordsComplete`: every word with alphabet-membership evidence for each
+  entry occurs in the enumeration at its own length. `scWordsCompleteAt`
+  accepts an explicit round count with a proof that it equals the word length.
+- `scFiniteWordsComplete`: every word over a packaged finite carrier occurs
+  in the challenge enumeration at its length.
 
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
@@ -86,15 +97,20 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all seventeen checks passed with checker SHA-256
+On 2026-09-06, all twenty-one checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The seventeen checks:
+The twenty-one checks:
 
 - All generic proofs check without a prelude or axioms.
+- Word membership and length evidence checks for a two-round word, the empty
+  word over an empty alphabet, and an alphabet with repeated entries.
+- Word membership evidence supplied at the wrong round count is rejected.
+- Forged pointwise evidence omitting an entry's alphabet membership is rejected.
+- Forged pointwise evidence omitting the tail's obligations is rejected.
 - Product and word sizes and exact contents check, including empty factors,
   zero rounds over an empty alphabet, positive rounds over an empty alphabet,
   and the word predicate-count bound.
@@ -127,11 +143,12 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check six deliberate mutations in memory. All six were caught:
+suite and check eight deliberate mutations in memory. All eight were caught:
 incorrect multiplication and power base cases, dropped append entries,
-missing zero-round words, omitted challenges, and doubled challenges.
-The last two preserve enumeration cardinality and are caught by the exact
-word-content regression rather than the generic size proofs.
+missing zero-round words, omitted challenges, doubled challenges, and dropped
+head or tail obligations in pointwise evidence. All are caught by generic
+proofs. Omitting or doubling challenges preserves enumeration cardinality,
+but now fails the word-length proof; exact word-content regressions also remain.
 
 Naturals in the concrete regression example test the algebraic equations;
 they are not presented as a finite field.
@@ -139,15 +156,16 @@ The two-element carrier likewise has no field structure yet. Empty carriers
 are permitted by `ScFinite`; a uniform probability interpretation will need
 nonemptiness. Product and word size formulas count list entries with
 multiplicity. Packaging these lists as exhaustive, duplicate-free finite
-carriers, proving every generated word has the requested length, and
-enumeration independence of counts remain future work. The word count bound
+carriers and enumeration independence of counts remain future work. Word
+exhaustiveness and generated-word lengths are proved, but uniqueness of the
+enumeration is still needed to interpret its entries as distinct outcomes.
+The word count bound
 is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 ## Next milestones
 
-1. Extend product/word enumerations with exhaustiveness, uniqueness, and
-   word-length proofs; establish enumeration independence and the remaining
-   arithmetic needed for soundness.
+1. Prove product exhaustiveness and product/word uniqueness; establish
+   enumeration independence and the remaining arithmetic needed for soundness.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -162,7 +180,7 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
    bound as a hypothesis, label them conditional until it is discharged.
 
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
-`src/Counting.tot`, `src/Products.tot`.
+`src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`.
 
 ## License
 

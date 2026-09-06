@@ -1,11 +1,11 @@
-"""Check that product and word regressions catch deliberate source mutations."""
+"""Check that product and word proofs catch deliberate source mutations."""
 import tempfile
 
 import check
 
 
 # Replacements apply to the in-memory concatenation, never to source files.
-# The last two preserve enumeration cardinality but corrupt word contents.
+# Challenge mutations preserve enumeration cardinality but corrupt word contents.
 MUTATIONS = [
     ("multiplication-base", "| zero => zero | succ k => scAdd m (scMul k m) end",
      "| zero => m | succ k => scAdd m (scMul k m) end", 1),
@@ -15,9 +15,13 @@ MUTATIONS = [
      "scAppend A rest ys", 1),
     ("zero-round-has-no-word", "cons (List A) (nil A) (nil (List A))",
      "nil (List A)", 1),
-    ("words-omit-challenge", "fun word => cons A x word", "fun word => word", 4),
+    ("words-omit-challenge", "fun word => cons A x word", "fun word => word", 6),
     ("words-double-challenge", "fun word => cons A x word",
-     "fun word => cons A x (cons A x word)", 4),
+     "fun word => cons A x (cons A x word)", 6),
+    ("all-drops-head-evidence", "Pair (P x) (scAll A P rest)",
+     "Pair ScUnit (scAll A P rest)", 1),
+    ("all-drops-tail-evidence", "Pair (P x) (scAll A P rest)",
+     "Pair (P x) ScUnit", 1),
 ]
 
 

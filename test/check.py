@@ -10,7 +10,7 @@ DEFAULT_TOT = ROOT.parent / "tot" / "_build" / "default" / "bin" / "tot.exe"
 TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
-                  "Products.tot"))
+                  "Products.tot", "WordEnumeration.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -28,6 +28,48 @@ reducible def honestN : ScTrace Nat :=
 # status 1 and print that string in its diagnostic.
 CASES = [
     ("generic-proofs", "", None),
+    ("word-enumeration-evidence", EXAMPLE + """
+reducible def highLow : List ScBit := cons ScBit scHigh (cons ScBit scLow (nil ScBit))
+def highLowMember : scMember (List ScBit) highLow (scWords ScBit scBits twoN) :=
+  scFiniteWordsComplete ScBit scBitFinite highLow
+def highLowLength : Eq Nat (scLength ScBit highLow) twoN :=
+  scWordLength ScBit scBits twoN highLow highLowMember
+def emptyWordMember : scMember (List ScEmpty) (nil ScEmpty)
+    (scWords ScEmpty (nil ScEmpty) zero) :=
+  scWordsComplete ScEmpty (nil ScEmpty) (nil ScEmpty) scUnit
+reducible def repeatedAlphabet : List ScBit :=
+  cons ScBit scHigh (cons ScBit scHigh (nil ScBit))
+reducible def highOnly : List ScBit := cons ScBit scHigh (nil ScBit)
+def repeatedMember : scMember (List ScBit) highOnly
+    (scWords ScBit repeatedAlphabet oneN) :=
+  scWordsCompleteAt ScBit repeatedAlphabet oneN highOnly (refl Nat oneN)
+    (pair (scMember ScBit scHigh repeatedAlphabet) ScUnit
+      (scLeft (Eq ScBit scHigh scHigh)
+        (scMember ScBit scHigh (cons ScBit scHigh (nil ScBit))) (refl ScBit scHigh)) scUnit)
+-- Membership in the tail exercises equality transport and recursive evidence.
+def tailLength : Eq Nat (scLength ScBit highLow) twoN :=
+  scAllMember (List ScBit) (fun w => Eq Nat (scLength ScBit w) twoN)
+    (cons (List ScBit) highLow (cons (List ScBit) highLow (nil (List ScBit))))
+    (pair (Eq Nat twoN twoN) (Pair (Eq Nat twoN twoN) ScUnit)
+      (refl Nat twoN) (pair (Eq Nat twoN twoN) ScUnit (refl Nat twoN) scUnit))
+    highLow (scRight (Eq (List ScBit) highLow highLow)
+      (ScEither (Eq (List ScBit) highLow highLow) ScEmpty)
+      (scLeft (Eq (List ScBit) highLow highLow) ScEmpty (refl (List ScBit) highLow)))
+""", None),
+    ("word-wrong-round-count", EXAMPLE + """
+def wrongRoundMember : scMember (List ScBit) (cons ScBit scHigh (nil ScBit))
+    (scWords ScBit scBits twoN) :=
+  scFiniteWordsComplete ScBit scBitFinite (cons ScBit scHigh (nil ScBit))
+""", "mismatch"),
+    ("word-missing-alphabet-evidence", """
+def forgedAlphabetEvidence : scAll ScBit (fun x => scMember ScBit x (nil ScBit))
+    (cons ScBit scHigh (nil ScBit)) := pair ScUnit ScUnit scUnit scUnit
+""", "mismatch"),
+    ("word-missing-tail-evidence", """
+def forgedTailEvidence : scAll ScBit (fun x => Eq ScBit x scHigh)
+    (cons ScBit scHigh (cons ScBit scLow (nil ScBit))) :=
+  pair (Eq ScBit scHigh scHigh) ScUnit (refl ScBit scHigh) scUnit
+""", "mismatch"),
     ("products-and-words", EXAMPLE + """
 def bitProductSize : Eq Nat
     (scLength (Pair ScBit ScBit) (scProduct ScBit ScBit scBits scBits)) fourN :=

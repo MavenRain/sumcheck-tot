@@ -1,0 +1,186 @@
+-- Membership and pointwise evidence for challenge-word enumerations.
+def scEqSym : (0 A : Type 0) -> (0 x : A) -> (0 y : A) ->
+    Eq A x y -> Eq A y x :=
+  fun A x y h => scTransport A x y (fun z => Eq A z x) h (refl A x)
+
+reducible def rec scAll : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    List A -> Type 0 :=
+  fun A P xs => match xs with
+  | nil => ScUnit
+  | cons x rest => Pair (P x) (scAll A P rest)
+  end
+
+def rec scAllMember : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (xs : List A) -> scAll A P xs -> (x : A) -> scMember A x xs -> P x :=
+  fun A P xs all x member => (match xs as ys return
+      scAll A P ys -> scMember A x ys -> P x with
+  | nil => fun evidence impossible => match impossible with end
+  | cons y rest => fun evidence membership => match evidence with
+    | pair head tail => match membership with
+      | scLeft h => scTransport A y x P (scEqSym A x y h) head
+      | scRight h => scAllMember A P rest tail x h
+      end
+    end
+  end) all member
+
+def rec scAllAppend : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (xs : List A) -> (ys : List A) -> scAll A P xs -> scAll A P ys ->
+    scAll A P (scAppend A xs ys) :=
+  fun A P xs ys left right => (match xs as zs return
+      scAll A P zs -> scAll A P (scAppend A zs ys) with
+  | nil => fun evidence => right
+  | cons x rest => fun evidence => match evidence with
+    | pair head tail => pair (P x) (scAll A P (scAppend A rest ys))
+        head (scAllAppend A P rest ys tail right)
+    end
+  end) left
+
+def rec scAllMap : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : A -> Type 0) -> (0 Q : B -> Type 0) -> (f : A -> B) ->
+    ((x : A) -> P x -> Q (f x)) -> (xs : List A) -> scAll A P xs ->
+    scAll B Q (scMap A B f xs) :=
+  fun A B P Q f step xs all => (match xs as ys return
+      scAll A P ys -> scAll B Q (scMap A B f ys) with
+  | nil => fun evidence => scUnit
+  | cons x rest => fun evidence => match evidence with
+    | pair head tail => pair (Q (f x)) (scAll B Q (scMap A B f rest))
+        (step x head) (scAllMap A B P Q f step rest tail)
+    end
+  end) all
+
+def rec scAllExpand : (0 A : Type 0) -> (0 B : Type 0) ->
+    (0 P : B -> Type 0) -> (block : A -> List B) ->
+    ((x : A) -> scAll B P (block x)) -> (xs : List A) ->
+    scAll B P (scExpand A B block xs) :=
+  fun A B P block valid xs => match xs as ys return
+      scAll B P (scExpand A B block ys) with
+  | nil => scUnit
+  | cons x rest => scAllAppend B P (block x) (scExpand A B block rest)
+      (valid x) (scAllExpand A B P block valid rest)
+  end
+
+def rec scWordsAllLengths : (0 A : Type 0) -> (alphabet : List A) -> (n : Nat) ->
+    scAll (List A) (fun word => Eq Nat (scLength A word) n) (scWords A alphabet n) :=
+  fun A alphabet n => match n as k return
+      scAll (List A) (fun word => Eq Nat (scLength A word) k)
+        (scWords A alphabet k) with
+  | zero => pair (Eq Nat zero zero) ScUnit (refl Nat zero) scUnit
+  | succ k => scAllExpand A (List A)
+      (fun word => Eq Nat (scLength A word) (succ k))
+      (fun x => scMap (List A) (List A) (fun word => cons A x word)
+        (scWords A alphabet k))
+      (fun x => scAllMap (List A) (List A)
+        (fun word => Eq Nat (scLength A word) k)
+        (fun word => Eq Nat (scLength A word) (succ k))
+        (fun word => cons A x word)
+        (fun word h => scSuccCong (scLength A word) k h)
+        (scWords A alphabet k) (scWordsAllLengths A alphabet k)) alphabet
+  end
+
+def scWordLength : (0 A : Type 0) -> (alphabet : List A) -> (n : Nat) ->
+    (word : List A) -> scMember (List A) word (scWords A alphabet n) ->
+    Eq Nat (scLength A word) n :=
+  fun A alphabet n word member => scAllMember (List A)
+    (fun w => Eq Nat (scLength A w) n) (scWords A alphabet n)
+    (scWordsAllLengths A alphabet n) word member
+
+def rec scMemberAppendLeft : (0 A : Type 0) -> (x : A) ->
+    (xs : List A) -> (ys : List A) -> scMember A x xs ->
+    scMember A x (scAppend A xs ys) :=
+  fun A x xs ys member => (match xs as zs return
+      scMember A x zs -> scMember A x (scAppend A zs ys) with
+  | nil => fun impossible => match impossible with end
+  | cons y rest => fun evidence => match evidence with
+    | scLeft h => scLeft (Eq A x y) (scMember A x (scAppend A rest ys)) h
+    | scRight h => scRight (Eq A x y) (scMember A x (scAppend A rest ys))
+        (scMemberAppendLeft A x rest ys h)
+    end
+  end) member
+
+def rec scMemberAppendRight : (0 A : Type 0) -> (x : A) ->
+    (xs : List A) -> (ys : List A) -> scMember A x ys ->
+    scMember A x (scAppend A xs ys) :=
+  fun A x xs ys member => match xs as zs return
+      scMember A x (scAppend A zs ys) with
+  | nil => member
+  | cons y rest => scRight (Eq A x y) (scMember A x (scAppend A rest ys))
+      (scMemberAppendRight A x rest ys member)
+  end
+
+def rec scMemberMap : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (x : A) -> (xs : List A) -> scMember A x xs ->
+    scMember B (f x) (scMap A B f xs) :=
+  fun A B f x xs member => (match xs as ys return
+      scMember A x ys -> scMember B (f x) (scMap A B f ys) with
+  | nil => fun impossible => match impossible with end
+  | cons y rest => fun evidence => match evidence with
+    | scLeft h => scLeft (Eq B (f x) (f y)) (scMember B (f x) (scMap A B f rest))
+        (scCong A B f x y h)
+    | scRight h => scRight (Eq B (f x) (f y)) (scMember B (f x) (scMap A B f rest))
+        (scMemberMap A B f x rest h)
+    end
+  end) member
+
+def rec scMemberExpand : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (x : A) -> (y : B) -> (xs : List A) ->
+    scMember A x xs -> scMember B y (block x) ->
+    scMember B y (scExpand A B block xs) :=
+  fun A B block x y xs member inside => (match xs as zs return
+      scMember A x zs -> scMember B y (scExpand A B block zs) with
+  | nil => fun impossible => match impossible with end
+  | cons z rest => fun evidence => match evidence with
+    | scLeft h => scMemberAppendLeft B y (block z) (scExpand A B block rest)
+        (scTransport A x z (fun a => scMember B y (block a)) h inside)
+    | scRight h => scMemberAppendRight B y (block z) (scExpand A B block rest)
+        (scMemberExpand A B block x y rest h inside)
+    end
+  end) member
+
+-- Completeness is stated at the word's own length, so malformed lengths
+-- cannot be supplied as unchecked indices.
+def rec scWordsComplete : (0 A : Type 0) -> (alphabet : List A) ->
+    (word : List A) -> scAll A (fun x => scMember A x alphabet) word ->
+    scMember (List A) word (scWords A alphabet (scLength A word)) :=
+  fun A alphabet word all => (match word as w return
+      scAll A (fun x => scMember A x alphabet) w ->
+      scMember (List A) w (scWords A alphabet (scLength A w)) with
+  | nil => fun evidence => scLeft (Eq (List A) (nil A) (nil A)) ScEmpty
+      (refl (List A) (nil A))
+  | cons x rest => fun evidence => match evidence with
+    | pair head tail => scMemberExpand A (List A)
+        (fun a => scMap (List A) (List A) (fun w => cons A a w)
+          (scWords A alphabet (scLength A rest)))
+        x (cons A x rest) alphabet head
+        (scMemberMap (List A) (List A) (fun w => cons A x w) rest
+          (scWords A alphabet (scLength A rest)) (scWordsComplete A alphabet rest tail))
+    end
+  end) all
+
+def rec scFiniteWordElements : (0 A : Type 0) -> (finite : ScFinite A) ->
+    (word : List A) -> scAll A (fun x => scMember A x (scElements A finite)) word :=
+  fun A finite word => match word as w return
+      scAll A (fun x => scMember A x (scElements A finite)) w with
+  | nil => scUnit
+  | cons x rest => pair (scMember A x (scElements A finite))
+      (scAll A (fun a => scMember A a (scElements A finite)) rest)
+      (scEnumerates A finite x) (scFiniteWordElements A finite rest)
+  end
+
+def scFiniteWordsComplete : (0 A : Type 0) -> (finite : ScFinite A) ->
+    (word : List A) -> scMember (List A) word
+      (scWords A (scElements A finite) (scLength A word)) :=
+  fun A finite word => scWordsComplete A (scElements A finite) word
+    (scFiniteWordElements A finite word)
+
+def scWordsCompleteAt : (0 A : Type 0) -> (alphabet : List A) -> (n : Nat) ->
+    (word : List A) -> Eq Nat (scLength A word) n ->
+    scAll A (fun x => scMember A x alphabet) word ->
+    scMember (List A) word (scWords A alphabet n) :=
+  fun A alphabet n word sized all => scTransport Nat (scLength A word) n
+    (fun k => scMember (List A) word (scWords A alphabet k)) sized
+    (scWordsComplete A alphabet word all)
+
+check scWordLength
+check scWordsComplete
+check scFiniteWordsComplete
+check scWordsCompleteAt
