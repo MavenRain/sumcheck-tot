@@ -20,6 +20,8 @@ cardinality `|F|^n`. Their list conversion preserves length and is injective;
 every list converts to a vector at its own length and back unchanged.
 Converting the full vector enumeration gives exactly the challenge-word list,
 in the same order. Predicate counts agree under this conversion.
+Counts now respect predicate implication and equivalence, are independent of
+the decision procedure, add over appended lists, and satisfy a binary union bound.
 
 ## Check
 
@@ -118,6 +120,18 @@ compiler rebuild is required when a built checker exists.
 - `scVectorWordCount`: finite vector counts of a list predicate pulled back
   through `scVectorList` equal its challenge-word counts.
 
+- `scCountMono`: pointwise predicate implication gives an inequality between
+  counts, with independently supplied proof-carrying decision procedures.
+- `scCountEquivalent` and `scCountDecisionIndependent`: pointwise logical
+  equivalence preserves counts; in particular, two decision procedures for
+  the same predicate give equal counts. No proof irrelevance is assumed.
+- `scCountAppend`: the count over an append is the sum of the two counts.
+- `scEitherDec` and `scCountUnionBound`: disjunction is decidable, and its
+  count is at most the sum of the component counts. Overlap is permitted.
+  These list results include empty lists and count repeated entries with
+  multiplicity. Specializing the list to `scElements A finite` gives the
+  corresponding finite-carrier results for a fixed enumeration.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -151,15 +165,22 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all thirty-nine checks passed with checker SHA-256
+On 2026-09-06, all forty-four checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The thirty-nine checks:
+The forty-four checks:
 
 - All generic proofs check without a prelude or axioms.
+- All five public counting-algebra theorems check at abstract arguments.
+- Disjunction decisions cover all four truth combinations; concrete counting
+  checks cover repeated entries, appended lists, overlapping predicates,
+  and an empty list.
+- Count monotonicity used in the reverse direction is rejected.
+- Count equivalence supplied without the reverse implication is rejected.
+- A union bound omitting the right predicate's count is rejected.
 - Enumeration conversion and count equality check at abstract arguments,
   alongside the three generic map lemmas and count-map lemma. Concrete
   instances cover two-bit vectors, empty carriers at zero and two rounds,
@@ -227,8 +248,11 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check twenty-nine deliberate mutations in memory. All twenty-nine were caught.
-Three new mutations consistently trivialize the enumeration, count-map, and
+suite and check thirty-four deliberate mutations in memory. All thirty-four were caught.
+Five counting-algebra mutations consistently trivialize the theorem statements
+and replace their proofs. Abstract-argument checks catch four; the equivalence
+mutation is caught by its decision-independence consumer.
+Three enumeration mutations consistently trivialize the enumeration, count-map, and
 vector-word-count statements. Their consumers catch the first two; the
 abstract count-equality regression catches the third. The existing controls cover:
 incorrect multiplication and power base cases, dropped append entries,
@@ -264,7 +288,9 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 ## Next milestones
 
 1. Establish enumeration independence and prove the remaining arithmetic
-   needed for soundness.
+   needed for soundness. Predicate monotonicity, decision independence,
+   append additivity, and the binary union bound are now proved; independence
+   from the finite enumeration and adaptive counting remain open.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -280,7 +306,8 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
-`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`, `src/VectorEnumeration.tot`.
+`src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
+`src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`.
 
 ## License
 

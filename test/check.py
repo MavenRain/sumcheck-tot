@@ -11,7 +11,7 @@ TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
-                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot"))
+                  "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot", "CountingAlgebra.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -152,8 +152,96 @@ VECTOR_CHECKS += "\n".join(
     for i, v in enumerate(BIT_VECTORS) for j, w in enumerate(BIT_VECTORS)
 )
 
+COUNTING_ALGEBRA_CHECKS = """
+def scCountMonoAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (Q x)) ->
+    (xs : List A) -> ScLe (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q implies dp dq xs => scCountMono A P Q implies dp dq xs
+
+def scCountEquivalentAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    ((x : A) -> Q x -> P x) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    Eq Nat (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q forward backward dp dq xs => scCountEquivalent A P Q forward backward dp dq xs
+
+def scCountDecisionIndependentAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (P x)) ->
+    (xs : List A) -> Eq Nat (scCount A P dp xs) (scCount A P dq xs) :=
+  fun A P dp dq xs => scCountDecisionIndependent A P dp dq xs
+
+def scCountAppendAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) -> (ys : List A) ->
+    Eq Nat (scCount A P decide (scAppend A xs ys))
+      (scAdd (scCount A P decide xs) (scCount A P decide ys)) :=
+  fun A P decide xs ys => scCountAppend A P decide xs ys
+
+def scCountUnionBoundAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    ScLe (scCount A (fun x => ScEither (P x) (Q x))
+        (fun x => scEitherDec (P x) (Q x) (dp x) (dq x)) xs)
+      (scAdd (scCount A P dp xs) (scCount A Q dq xs)) :=
+  fun A P Q dp dq xs => scCountUnionBound A P Q dp dq xs
+"""
+
+COUNTING_ALGEBRA_EXAMPLES = EXAMPLE + """
+
+def unionNeither : Eq Nat (scTally (ScEither ScEmpty ScEmpty)
+    (scEitherDec ScEmpty ScEmpty (scNo ScEmpty (fun h => h))
+      (scNo ScEmpty (fun h => h))) zero) zero := refl Nat zero
+def unionLeft : Eq Nat (scTally (ScEither ScUnit ScEmpty)
+    (scEitherDec ScUnit ScEmpty (scYes ScUnit scUnit)
+      (scNo ScEmpty (fun h => h))) zero) oneN := refl Nat oneN
+def unionRight : Eq Nat (scTally (ScEither ScEmpty ScUnit)
+    (scEitherDec ScEmpty ScUnit (scNo ScEmpty (fun h => h))
+      (scYes ScUnit scUnit)) zero) oneN := refl Nat oneN
+def unionBoth : Eq Nat (scTally (ScEither ScUnit ScUnit)
+    (scEitherDec ScUnit ScUnit (scYes ScUnit scUnit)
+      (scYes ScUnit scUnit)) zero) oneN := refl Nat oneN
+reducible def repeatedBits : List ScBit := cons ScBit scHigh scBits
+def appendRepeatedCount : Eq Nat
+    (scCount ScBit (fun x => ScUnit) (fun x => scYes ScUnit scUnit)
+      (scAppend ScBit repeatedBits scBits)) (scAdd (succ twoN) twoN) :=
+  scCountAppend ScBit (fun x => ScUnit) (fun x => scYes ScUnit scUnit)
+    repeatedBits scBits
+def overlappingUnionBound : ScLe
+    (scCount ScBit (fun x => ScEither ScUnit ScUnit)
+      (fun x => scEitherDec ScUnit ScUnit (scYes ScUnit scUnit)
+        (scYes ScUnit scUnit)) scBits) fourN :=
+  scCountUnionBound ScBit (fun x => ScUnit) (fun x => ScUnit)
+    (fun x => scYes ScUnit scUnit) (fun x => scYes ScUnit scUnit) scBits
+def emptyUnionBound : ScLe zero zero :=
+  scCountUnionBound ScBit (fun x => ScUnit) (fun x => ScUnit)
+    (fun x => scYes ScUnit scUnit) (fun x => scYes ScUnit scUnit) (nil ScBit)
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ('counting-algebra', COUNTING_ALGEBRA_CHECKS, None),
+    ('counting-algebra-examples', COUNTING_ALGEBRA_EXAMPLES, None),
+    ("count-mono-reversed", """def badMono : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (Q x)) ->
+    (xs : List A) -> ScLe (scCount A Q dq xs) (scCount A P dp xs) :=
+  fun A P Q implies dp dq xs => scCountMono A P Q implies dp dq xs
+""", "mismatch"),
+    ("count-equivalence-missing-reverse", """def badEquivalent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    ((x : A) -> P x -> Q x) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    Eq Nat (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q forward backward dp dq xs => scCountEquivalent A P Q forward backward dp dq xs
+""", "mismatch"),
+    ("union-bound-omits-right-count", """def badUnion : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    ScLe (scCount A (fun x => ScEither (P x) (Q x))
+        (fun x => scEitherDec (P x) (Q x) (dp x) (dq x)) xs)
+      (scCount A P dp xs) :=
+  fun A P Q dp dq xs => scCountUnionBound A P Q dp dq xs
+""", "mismatch"),
     ('vector-word-counts', PRODUCT_EXAMPLE + """def scMapAppendAt : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
     (xs : List A) -> (ys : List A) ->
     Eq (List B) (scMap A B f (scAppend A xs ys))

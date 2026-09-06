@@ -1,0 +1,163 @@
+-- Counts depend on predicate truth, with multiplicity retained for list entries.
+def scTallyMono : (0 P : Type 0) -> (0 Q : Type 0) -> (P -> Q) ->
+    (dp : ScDec P) -> (dq : ScDec Q) -> (n : Nat) -> (m : Nat) ->
+    ScLe n m -> ScLe (scTally P dp n) (scTally Q dq m) :=
+  fun P Q implies dp dq n m bound => match dp as d return
+      ScLe (scTally P d n) (scTally Q dq m) with
+  | scYes p => match dq as e return ScLe (succ n) (scTally Q e m) with
+    | scYes q => scLeSucc n m bound
+    | scNo refute => match refute (implies p) with end
+    end
+  | scNo refute => match dq as e return ScLe n (scTally Q e m) with
+    | scYes q => scLeWeaken n m bound
+    | scNo reject => bound
+    end
+  end
+
+def rec scCountMono : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (Q x)) ->
+    (xs : List A) -> ScLe (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q implies dp dq xs => match xs as ys return
+      ScLe (scCount A P dp ys) (scCount A Q dq ys) with
+  | nil => scLeZero zero
+  | cons x rest => scTallyMono (P x) (Q x) (implies x) (dp x) (dq x)
+      (scCount A P dp rest) (scCount A Q dq rest)
+      (scCountMono A P Q implies dp dq rest)
+  end
+
+def scTallyEquivalent : (0 P : Type 0) -> (0 Q : Type 0) ->
+    (P -> Q) -> (Q -> P) -> (dp : ScDec P) -> (dq : ScDec Q) ->
+    (n : Nat) -> (m : Nat) -> Eq Nat n m ->
+    Eq Nat (scTally P dp n) (scTally Q dq m) :=
+  fun P Q forward backward dp dq n m equal => match dp as d return
+      Eq Nat (scTally P d n) (scTally Q dq m) with
+  | scYes p => match dq as e return Eq Nat (succ n) (scTally Q e m) with
+    | scYes q => scSuccCong n m equal
+    | scNo refute => match refute (forward p) with end
+    end
+  | scNo refute => match dq as e return Eq Nat n (scTally Q e m) with
+    | scYes q => match refute (backward q) with end
+    | scNo reject => equal
+    end
+  end
+
+def rec scCountEquivalent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    ((x : A) -> Q x -> P x) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    Eq Nat (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q forward backward dp dq xs => match xs as ys return
+      Eq Nat (scCount A P dp ys) (scCount A Q dq ys) with
+  | nil => refl Nat zero
+  | cons x rest => scTallyEquivalent (P x) (Q x) (forward x) (backward x)
+      (dp x) (dq x) (scCount A P dp rest) (scCount A Q dq rest)
+      (scCountEquivalent A P Q forward backward dp dq rest)
+  end
+
+def scCountDecisionIndependent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (P x)) ->
+    (xs : List A) -> Eq Nat (scCount A P dp xs) (scCount A P dq xs) :=
+  fun A P dp dq xs => scCountEquivalent A P P (fun x p => p)
+    (fun x p => p) dp dq xs
+
+def scTallyAdd : (0 P : Type 0) -> (decision : ScDec P) ->
+    (n : Nat) -> (m : Nat) ->
+    Eq Nat (scTally P decision (scAdd n m)) (scAdd (scTally P decision n) m) :=
+  fun P decision n m => match decision as d return
+      Eq Nat (scTally P d (scAdd n m)) (scAdd (scTally P d n) m) with
+  | scYes p => refl Nat (succ (scAdd n m))
+  | scNo refute => refl Nat (scAdd n m)
+  end
+
+def rec scCountAppend : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) -> (ys : List A) ->
+    Eq Nat (scCount A P decide (scAppend A xs ys))
+      (scAdd (scCount A P decide xs) (scCount A P decide ys)) :=
+  fun A P decide xs ys => match xs as zs return
+      Eq Nat (scCount A P decide (scAppend A zs ys))
+        (scAdd (scCount A P decide zs) (scCount A P decide ys)) with
+  | nil => refl Nat (scCount A P decide ys)
+  | cons x rest => scEqTrans Nat
+      (scTally (P x) (decide x) (scCount A P decide (scAppend A rest ys)))
+      (scTally (P x) (decide x)
+        (scAdd (scCount A P decide rest) (scCount A P decide ys)))
+      (scAdd (scTally (P x) (decide x) (scCount A P decide rest))
+        (scCount A P decide ys))
+      (scCong Nat Nat (scTally (P x) (decide x))
+        (scCount A P decide (scAppend A rest ys))
+        (scAdd (scCount A P decide rest) (scCount A P decide ys))
+        (scCountAppend A P decide rest ys))
+      (scTallyAdd (P x) (decide x) (scCount A P decide rest) (scCount A P decide ys))
+  end
+
+def rec scAddSuccRight : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scAdd n (succ m)) (succ (scAdd n m)) :=
+  fun n m => match n as k return
+      Eq Nat (scAdd k (succ m)) (succ (scAdd k m)) with
+  | zero => refl Nat (succ m)
+  | succ k => scSuccCong (scAdd k (succ m)) (succ (scAdd k m))
+      (scAddSuccRight k m)
+  end
+
+reducible def scEitherDec : (0 P : Type 0) -> (0 Q : Type 0) ->
+    ScDec P -> ScDec Q -> ScDec (ScEither P Q) :=
+  fun P Q dp dq => match dp with
+  | scYes p => scYes (ScEither P Q) (scLeft P Q p)
+  | scNo refute => match dq with
+    | scYes q => scYes (ScEither P Q) (scRight P Q q)
+    | scNo reject => scNo (ScEither P Q) (fun either => match either with
+      | scLeft p => refute p | scRight q => reject q end)
+    end
+  end
+
+def scTallyUnionBound : (0 P : Type 0) -> (0 Q : Type 0) ->
+    (dp : ScDec P) -> (dq : ScDec Q) -> (n : Nat) -> (m : Nat) -> (k : Nat) ->
+    ScLe n (scAdd m k) ->
+    ScLe (scTally (ScEither P Q) (scEitherDec P Q dp dq) n)
+      (scAdd (scTally P dp m) (scTally Q dq k)) :=
+  fun P Q dp dq n m k bound => match dp as d return
+      ScLe (scTally (ScEither P Q) (scEitherDec P Q d dq) n)
+        (scAdd (scTally P d m) (scTally Q dq k)) with
+  | scYes p => match dq as e return
+      ScLe (succ n) (succ (scAdd m (scTally Q e k))) with
+    | scYes q => scTransport Nat (succ (scAdd m k)) (scAdd m (succ k))
+        (fun z => ScLe (succ n) (succ z))
+        (scEqSym Nat (scAdd m (succ k)) (succ (scAdd m k)) (scAddSuccRight m k))
+        (scLeSucc n (succ (scAdd m k)) (scLeWeaken n (scAdd m k) bound))
+    | scNo reject => scLeSucc n (scAdd m k) bound
+    end
+  | scNo refute => match dq as e return
+      ScLe (scTally (ScEither P Q) (scEitherDec P Q (scNo P refute) e) n)
+        (scAdd m (scTally Q e k)) with
+    | scYes q => scTransport Nat (succ (scAdd m k)) (scAdd m (succ k))
+        (fun z => ScLe (succ n) z)
+        (scEqSym Nat (scAdd m (succ k)) (succ (scAdd m k)) (scAddSuccRight m k))
+        (scLeSucc n (scAdd m k) bound)
+    | scNo reject => bound
+    end
+  end
+
+def rec scCountUnionBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    ScLe (scCount A (fun x => ScEither (P x) (Q x))
+        (fun x => scEitherDec (P x) (Q x) (dp x) (dq x)) xs)
+      (scAdd (scCount A P dp xs) (scCount A Q dq xs)) :=
+  fun A P Q dp dq xs => match xs as ys return
+      ScLe (scCount A (fun x => ScEither (P x) (Q x))
+          (fun x => scEitherDec (P x) (Q x) (dp x) (dq x)) ys)
+        (scAdd (scCount A P dp ys) (scCount A Q dq ys)) with
+  | nil => scLeZero zero
+  | cons x rest => scTallyUnionBound (P x) (Q x) (dp x) (dq x)
+      (scCount A (fun y => ScEither (P y) (Q y))
+        (fun y => scEitherDec (P y) (Q y) (dp y) (dq y)) rest)
+      (scCount A P dp rest) (scCount A Q dq rest)
+      (scCountUnionBound A P Q dp dq rest)
+  end
+
+check scCountMono
+check scCountEquivalent
+check scCountDecisionIndependent
+check scCountAppend
+check scCountUnionBound

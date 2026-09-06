@@ -6,9 +6,94 @@ import check
 
 # Replacements apply to the in-memory concatenation, never to source files.
 # Challenge mutations preserve enumeration cardinality but corrupt word contents.
-# Trivialized statements survive every concrete instance; the abstract-argument
-# vector checks are what reject them.
+# Abstract-argument checks pin statements without generic consumers;
+# other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scCountMono-trivialized", """def rec scCountMono : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (Q x)) ->
+    (xs : List A) -> ScLe (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q implies dp dq xs => match xs as ys return
+      ScLe (scCount A P dp ys) (scCount A Q dq ys) with
+  | nil => scLeZero zero
+  | cons x rest => scTallyMono (P x) (Q x) (implies x) (dp x) (dq x)
+      (scCount A P dp rest) (scCount A Q dq rest)
+      (scCountMono A P Q implies dp dq rest)
+  end""", """def scCountMono : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (Q x)) ->
+    (xs : List A) -> ScLe (scCount A P dp xs) (scCount A P dp xs) :=
+  fun A P Q implies dp dq xs => scLeRefl (scCount A P dp xs)""", 1),
+    ("scCountEquivalent-trivialized", """def rec scCountEquivalent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    ((x : A) -> Q x -> P x) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    Eq Nat (scCount A P dp xs) (scCount A Q dq xs) :=
+  fun A P Q forward backward dp dq xs => match xs as ys return
+      Eq Nat (scCount A P dp ys) (scCount A Q dq ys) with
+  | nil => refl Nat zero
+  | cons x rest => scTallyEquivalent (P x) (Q x) (forward x) (backward x)
+      (dp x) (dq x) (scCount A P dp rest) (scCount A Q dq rest)
+      (scCountEquivalent A P Q forward backward dp dq rest)
+  end""", """def scCountEquivalent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> ((x : A) -> P x -> Q x) ->
+    ((x : A) -> Q x -> P x) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    Eq Nat (scCount A P dp xs) (scCount A P dp xs) :=
+  fun A P Q forward backward dp dq xs => refl Nat (scCount A P dp xs)""", 1),
+    ("scCountDecisionIndependent-trivialized", """def scCountDecisionIndependent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (P x)) ->
+    (xs : List A) -> Eq Nat (scCount A P dp xs) (scCount A P dq xs) :=
+  fun A P dp dq xs => scCountEquivalent A P P (fun x p => p)
+    (fun x p => p) dp dq xs""", """def scCountDecisionIndependent : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (dp : (x : A) -> ScDec (P x)) -> (dq : (x : A) -> ScDec (P x)) ->
+    (xs : List A) -> Eq Nat (scCount A P dp xs) (scCount A P dp xs) :=
+  fun A P dp dq xs => refl Nat (scCount A P dp xs)""", 1),
+    ("scCountAppend-trivialized", """def rec scCountAppend : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) -> (ys : List A) ->
+    Eq Nat (scCount A P decide (scAppend A xs ys))
+      (scAdd (scCount A P decide xs) (scCount A P decide ys)) :=
+  fun A P decide xs ys => match xs as zs return
+      Eq Nat (scCount A P decide (scAppend A zs ys))
+        (scAdd (scCount A P decide zs) (scCount A P decide ys)) with
+  | nil => refl Nat (scCount A P decide ys)
+  | cons x rest => scEqTrans Nat
+      (scTally (P x) (decide x) (scCount A P decide (scAppend A rest ys)))
+      (scTally (P x) (decide x)
+        (scAdd (scCount A P decide rest) (scCount A P decide ys)))
+      (scAdd (scTally (P x) (decide x) (scCount A P decide rest))
+        (scCount A P decide ys))
+      (scCong Nat Nat (scTally (P x) (decide x))
+        (scCount A P decide (scAppend A rest ys))
+        (scAdd (scCount A P decide rest) (scCount A P decide ys))
+        (scCountAppend A P decide rest ys))
+      (scTallyAdd (P x) (decide x) (scCount A P decide rest) (scCount A P decide ys))
+  end""", """def scCountAppend : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (xs : List A) -> (ys : List A) ->
+    Eq Nat (scCount A P decide (scAppend A xs ys))
+      (scCount A P decide (scAppend A xs ys)) :=
+  fun A P decide xs ys => refl Nat (scCount A P decide (scAppend A xs ys))""", 1),
+    ("scCountUnionBound-trivialized", """def rec scCountUnionBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    ScLe (scCount A (fun x => ScEither (P x) (Q x))
+        (fun x => scEitherDec (P x) (Q x) (dp x) (dq x)) xs)
+      (scAdd (scCount A P dp xs) (scCount A Q dq xs)) :=
+  fun A P Q dp dq xs => match xs as ys return
+      ScLe (scCount A (fun x => ScEither (P x) (Q x))
+          (fun x => scEitherDec (P x) (Q x) (dp x) (dq x)) ys)
+        (scAdd (scCount A P dp ys) (scCount A Q dq ys)) with
+  | nil => scLeZero zero
+  | cons x rest => scTallyUnionBound (P x) (Q x) (dp x) (dq x)
+      (scCount A (fun y => ScEither (P y) (Q y))
+        (fun y => scEitherDec (P y) (Q y) (dp y) (dq y)) rest)
+      (scCount A P dp rest) (scCount A Q dq rest)
+      (scCountUnionBound A P Q dp dq rest)
+  end""", """def scCountUnionBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (0 Q : A -> Type 0) -> (dp : (x : A) -> ScDec (P x)) ->
+    (dq : (x : A) -> ScDec (Q x)) -> (xs : List A) ->
+    ScLe (scCount A P dp xs) (scCount A P dp xs) :=
+  fun A P Q dp dq xs => scLeRefl (scCount A P dp xs)""", 1),
     ('scVectorEnumeration-trivialized', """def rec scVectorEnumeration : (0 A : Type 0) -> (finite : ScFinite A) -> (n : Nat) ->
     Eq (List (List A))
       (scMap (ScVector A n) (List A) (scVectorList A n)
