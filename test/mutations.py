@@ -9,6 +9,175 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scAddComm-trivialized", """def rec scAddComm : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scAdd n m) (scAdd m n) :=
+  fun n m => match n as a return Eq Nat (scAdd a m) (scAdd m a) with
+  | zero => scEqSym Nat (scAdd m zero) m (scAddZeroRight m)
+  | succ a => scEqTrans Nat (succ (scAdd a m)) (succ (scAdd m a))
+      (scAdd m (succ a)) (scSuccCong (scAdd a m) (scAdd m a) (scAddComm a m))
+      (scEqSym Nat (scAdd m (succ a)) (succ (scAdd m a)) (scAddSuccRight m a))
+  end""",
+     """def scAddComm : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scAdd n m) (scAdd n m) :=
+  fun n m => refl Nat (scAdd n m)""", 1),
+    ("scAddSwap-trivialized", """def scAddSwap : (a : Nat) -> (b : Nat) -> (c : Nat) ->
+    Eq Nat (scAdd a (scAdd b c)) (scAdd b (scAdd a c)) :=
+  fun a b c => scEqTrans Nat (scAdd a (scAdd b c)) (scAdd (scAdd a b) c)
+    (scAdd b (scAdd a c))
+    (scEqSym Nat (scAdd (scAdd a b) c) (scAdd a (scAdd b c)) (scAddAssoc a b c))
+    (scEqTrans Nat (scAdd (scAdd a b) c) (scAdd (scAdd b a) c)
+      (scAdd b (scAdd a c))
+      (scCong Nat Nat (fun x => scAdd x c) (scAdd a b) (scAdd b a) (scAddComm a b))
+      (scAddAssoc b a c))""",
+     """def scAddSwap : (a : Nat) -> (b : Nat) -> (c : Nat) ->
+    Eq Nat (scAdd a (scAdd b c)) (scAdd a (scAdd b c)) :=
+  fun a b c => refl Nat (scAdd a (scAdd b c))""", 1),
+    ("scMulSuccRight-trivialized", """def rec scMulSuccRight : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scMul n (succ m)) (scAdd n (scMul n m)) :=
+  fun n m => match n as a return
+      Eq Nat (scMul a (succ m)) (scAdd a (scMul a m)) with
+  | zero => refl Nat zero
+  | succ a => scSuccCong (scAdd m (scMul a (succ m)))
+      (scAdd a (scAdd m (scMul a m)))
+      (scEqTrans Nat (scAdd m (scMul a (succ m)))
+        (scAdd m (scAdd a (scMul a m))) (scAdd a (scAdd m (scMul a m)))
+        (scCong Nat Nat (scAdd m) (scMul a (succ m)) (scAdd a (scMul a m))
+          (scMulSuccRight a m)) (scAddSwap m a (scMul a m)))
+  end""",
+     """def scMulSuccRight : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scMul n (succ m)) (scMul n (succ m)) :=
+  fun n m => refl Nat (scMul n (succ m))""", 1),
+    ("scMulComm-trivialized", """def rec scMulComm : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scMul n m) (scMul m n) :=
+  fun n m => match n as a return Eq Nat (scMul a m) (scMul m a) with
+  | zero => scEqSym Nat (scMul m zero) zero (scMulZeroRight m)
+  | succ a => scEqTrans Nat (scAdd m (scMul a m)) (scAdd m (scMul m a))
+      (scMul m (succ a))
+      (scCong Nat Nat (scAdd m) (scMul a m) (scMul m a) (scMulComm a m))
+      (scEqSym Nat (scMul m (succ a)) (scAdd m (scMul m a)) (scMulSuccRight m a))
+  end""",
+     """def scMulComm : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scMul n m) (scMul n m) :=
+  fun n m => refl Nat (scMul n m)""", 1),
+    ("scMulSwap-trivialized", """def scMulSwap : (a : Nat) -> (b : Nat) -> (c : Nat) ->
+    Eq Nat (scMul a (scMul b c)) (scMul b (scMul a c)) :=
+  fun a b c => scEqTrans Nat (scMul a (scMul b c)) (scMul (scMul a b) c)
+    (scMul b (scMul a c))
+    (scEqSym Nat (scMul (scMul a b) c) (scMul a (scMul b c)) (scMulAssoc a b c))
+    (scEqTrans Nat (scMul (scMul a b) c) (scMul (scMul b a) c)
+      (scMul b (scMul a c))
+      (scCong Nat Nat (fun x => scMul x c) (scMul a b) (scMul b a) (scMulComm a b))
+      (scMulAssoc b a c))""",
+     """def scMulSwap : (a : Nat) -> (b : Nat) -> (c : Nat) ->
+    Eq Nat (scMul a (scMul b c)) (scMul a (scMul b c)) :=
+  fun a b c => refl Nat (scMul a (scMul b c))""", 1),
+    ("scErrorBudgetScaled-trivialized", """def rec scErrorBudgetScaled : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scMul q (scErrorBudget q d n)) (scMul (scMul n d) (scPow q n)) :=
+  fun q d n => match n as k return
+      Eq Nat (scMul q (scErrorBudget q d k)) (scMul (scMul k d) (scPow q k)) with
+  | zero => scMulZeroRight q
+  | succ k => scEqTrans Nat (scMul q (scErrorBudget q d (succ k)))
+      (scMul q (scMul (scMul (succ k) d) (scPow q k)))
+      (scMul (scMul (succ k) d) (scPow q (succ k)))
+      (scCong Nat Nat (scMul q) (scErrorBudget q d (succ k))
+        (scMul (scMul (succ k) d) (scPow q k))
+        (scEqTrans Nat (scErrorBudget q d (succ k))
+          (scAdd (scMul d (scPow q k)) (scMul (scMul k d) (scPow q k)))
+          (scMul (scMul (succ k) d) (scPow q k))
+          (scCong Nat Nat (scAdd (scMul d (scPow q k)))
+            (scMul q (scErrorBudget q d k)) (scMul (scMul k d) (scPow q k))
+            (scErrorBudgetScaled q d k))
+          (scEqSym Nat (scMul (scAdd d (scMul k d)) (scPow q k))
+            (scAdd (scMul d (scPow q k)) (scMul (scMul k d) (scPow q k)))
+            (scAddMul d (scMul k d) (scPow q k)))))
+      (scMulSwap q (scMul (succ k) d) (scPow q k))
+  end""",
+     """def scErrorBudgetScaled : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scMul q (scErrorBudget q d n)) (scMul q (scErrorBudget q d n)) :=
+  fun q d n => refl Nat (scMul q (scErrorBudget q d n))""", 1),
+    ("scErrorBudgetSuccessor-trivialized", """def scErrorBudgetSuccessor : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scErrorBudget q d (succ n)) (scMul (scMul (succ n) d) (scPow q n)) :=
+  fun q d n => scEqTrans Nat (scErrorBudget q d (succ n))
+    (scAdd (scMul d (scPow q n)) (scMul (scMul n d) (scPow q n)))
+    (scMul (scMul (succ n) d) (scPow q n))
+    (scCong Nat Nat (scAdd (scMul d (scPow q n)))
+      (scMul q (scErrorBudget q d n)) (scMul (scMul n d) (scPow q n))
+      (scErrorBudgetScaled q d n))
+    (scEqSym Nat (scMul (scAdd d (scMul n d)) (scPow q n))
+      (scAdd (scMul d (scPow q n)) (scMul (scMul n d) (scPow q n)))
+      (scAddMul d (scMul n d) (scPow q n)))""",
+     """def scErrorBudgetSuccessor : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scErrorBudget q d (succ n)) (scErrorBudget q d (succ n)) :=
+  fun q d n => refl Nat (scErrorBudget q d (succ n))""", 1),
+    ("scRecurrenceBound-trivialized", """def rec scRecurrenceBound : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (f n) (scErrorBudget q d n) :=
+  fun q d f initial step n => match n as k return
+      ScLe (f k) (scErrorBudget q d k) with
+  | zero => initial
+  | succ k => scLeTrans (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k))) (step k)
+      (scErrorBudget q d (succ k))
+      (scAddLe (scMul d (scPow q k)) (scMul d (scPow q k))
+        (scLeRefl (scMul d (scPow q k)))
+        (scMul q (f k)) (scMul q (scErrorBudget q d k))
+        (scMulMonoLeft q (f k) (scErrorBudget q d k)
+          (scRecurrenceBound q d f initial step k)))
+  end""",
+     """def scRecurrenceBound : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (f n) (f n) :=
+  fun q d f initial step n => scLeRefl (f n)""", 1),
+    ("scRecurrenceScaledBound-trivialized", """def scRecurrenceScaledBound : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (scMul q (f n)) (scMul (scMul n d) (scPow q n)) :=
+  fun q d f initial step n => scTransport Nat
+    (scMul q (scErrorBudget q d n)) (scMul (scMul n d) (scPow q n))
+    (fun upper => ScLe (scMul q (f n)) upper) (scErrorBudgetScaled q d n)
+    (scMulMonoLeft q (f n) (scErrorBudget q d n)
+      (scRecurrenceBound q d f initial step n))""",
+     """def scRecurrenceScaledBound : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (scMul q (f n)) (scMul q (f n)) :=
+  fun q d f initial step n => scLeRefl (scMul q (f n))""", 1),
+    ("budget-nonzero-base", """reducible def rec scErrorBudget : Nat -> Nat -> Nat -> Nat :=
+  fun q d n => match n with
+  | zero => zero
+  | succ k => scAdd (scMul d (scPow q k)) (scMul q (scErrorBudget q d k))
+  end""",
+     """reducible def rec scErrorBudget : Nat -> Nat -> Nat -> Nat :=
+  fun q d n => match n with
+  | zero => succ zero
+  | succ k => scAdd (scMul d (scPow q k)) (scMul q (scErrorBudget q d k))
+  end""", 1),
+    ("budget-omits-local", """reducible def rec scErrorBudget : Nat -> Nat -> Nat -> Nat :=
+  fun q d n => match n with
+  | zero => zero
+  | succ k => scAdd (scMul d (scPow q k)) (scMul q (scErrorBudget q d k))
+  end""",
+     """reducible def rec scErrorBudget : Nat -> Nat -> Nat -> Nat :=
+  fun q d n => match n with
+  | zero => zero
+  | succ k => scMul q (scErrorBudget q d k)
+  end""", 1),
+    ("budget-omits-carry-factor", """reducible def rec scErrorBudget : Nat -> Nat -> Nat -> Nat :=
+  fun q d n => match n with
+  | zero => zero
+  | succ k => scAdd (scMul d (scPow q k)) (scMul q (scErrorBudget q d k))
+  end""",
+     """reducible def rec scErrorBudget : Nat -> Nat -> Nat -> Nat :=
+  fun q d n => match n with
+  | zero => zero
+  | succ k => scAdd (scMul d (scPow q k)) (scErrorBudget q d k)
+  end""", 1),
     ("scMulZeroRight-trivialized", """def rec scMulZeroRight : (n : Nat) -> Eq Nat (scMul n zero) zero :=
   fun n => match n as a return Eq Nat (scMul a zero) zero with
   | zero => refl Nat zero

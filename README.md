@@ -27,6 +27,9 @@ Expansion and product counts split into sums of block counts. A uniform bound
 Natural-number bounds compose by transitivity and multiplication monotonicity.
 Multiplication distributes over addition in its first factor and is associative;
 powers satisfy `q^(n+m) = q^n * q^m`, including zero bases and exponents.
+The arithmetic recurrence `B(0)=0`, `B(n+1)=d*q^n+q*B(n)` has the checked
+closed form `q*B(n)=n*d*q^n`. Any natural-valued sequence satisfying its
+initial and step inequalities is bounded by this budget.
 
 ## Check
 
@@ -162,6 +165,20 @@ compiler rebuild is required when a built checker exists.
   assume no positivity, retain `0^0 = 1`, and live in `Arithmetic.tot`,
   after the existing arithmetic helpers in `FiberCounting.tot`.
 
+- `scAddComm`, `scAddSwap`, `scMulSuccRight`, `scMulComm`, and `scMulSwap`
+  supply commutativity, exchange of adjacent factors or summands, and the
+  right-successor multiplication law used to rearrange the recurrence.
+- `scErrorBudget q d n` defines `B(0)=0` and `B(n+1)=d*q^n+q*B(n)`.
+  `scErrorBudgetScaled` proves `q*B(n)=n*d*q^n` for every natural `q`, `d`,
+  and `n`. `scErrorBudgetSuccessor` proves `B(n+1)=(n+1)*d*q^n` without
+  division or positivity assumptions. In particular, `B(1)=d` even when
+  `q=0`, while `B(2)=0` in that case.
+- `scRecurrenceBound` bounds any `f : Nat -> Nat` by `B(n)`, provided
+  `f(0)<=0` and `f(k+1)<=d*q^k+q*f(k)` for every `k`.
+  `scRecurrenceScaledBound` gives `q*f(n)<=n*d*q^n` from those same
+  hypotheses. These are conditional arithmetic theorems in `Recurrence.tot`.
+  No theorem yet shows that accepting transcript counts satisfy the recurrence.
+
 `scAccept` is defined independently for arbitrary transcripts. A round
 requires `message(lo) + message(hi) = claim`, then checks the remaining
 transcript with claim `message(r)` and the restricted function `g(r :: xs)`.
@@ -195,15 +212,24 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all fifty-five checks passed with checker SHA-256
+On 2026-09-06, all sixty-one checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The fifty-five checks:
+The sixty-one checks:
 
 - All generic proofs check without a prelude or axioms.
+- All nine public recurrence and supporting arithmetic theorems check at
+  abstract arguments.
+- Concrete recurrence checks cover zero rounds, one through three rounds,
+  zero and unit carriers, zero degree, both closed forms, a sharp recurrence
+  bound, and a strict bound for the zero sequence.
+- A recurrence bound supplied without the initial inequality is rejected.
+- A recurrence bound supplied without the step inequality is rejected.
+- The successor closed form used with the wrong exponent is rejected.
+- The scaled recurrence bound used without its left factor is rejected.
 - All eight public arithmetic theorems check at abstract arguments.
 - Concrete arithmetic checks cover strict inequalities, zero factors,
   distribution, associativity, exponent addition, and zero bases and exponents.
@@ -291,11 +317,16 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check forty-eight deliberate mutations in memory. All forty-eight
-were caught. Eight arithmetic mutations replace each theorem with a reflexive
-statement and proof. Generic consumers reject five; abstract-argument checks
-reject the trivialized right-zero law, combined multiplication monotonicity,
-and exponent-addition law.
+suite and check sixty deliberate mutations in memory. All sixty were caught.
+Nine recurrence-module mutations replace theorem statements and proofs with
+reflexive versions. Generic consumers reject seven; the abstract checks reject
+the trivialized successor closed form and scaled recurrence bound. Three
+additional mutations change the budget's initial value, omit its local term,
+or omit the multiplier on its recursive term. Generic proofs reject all three.
+Eight earlier arithmetic mutations replace each theorem with a reflexive
+statement and proof. Generic consumers reject six; abstract-argument checks
+reject the trivialized combined multiplication monotonicity and exponent-addition
+law. The recurrence module now consumes the right-zero law at abstract arguments.
 The mutation battery also includes six consistent statement trivializations
 for the fiber-counting theorems. Their generic consumers or abstract-argument
 checks reject them.
@@ -339,13 +370,12 @@ is a bound on arbitrary predicates, not a sumcheck soundness theorem.
 
 ## Next milestones
 
-1. Establish enumeration independence and complete the arithmetic needed
-   for the soundness recurrence. Multiplication associativity, distribution
-   over a sum in the first factor, order transitivity, multiplication
-   monotonicity, and exponent addition are proved. Predicate monotonicity,
-   decision independence, append additivity, and the binary union bound are proved; independence
-   from the finite enumeration remains open. Product fiber decomposition and
-   uniform fiber bounds are proved; adaptive strategy counting remains open.
+1. Establish independence from the finite enumeration. Predicate monotonicity,
+   decision independence, append additivity, the binary union bound, product
+   fiber decomposition, and uniform fiber bounds are proved. The arithmetic
+   recurrence and its scaled closed form are proved conditionally on initial
+   and step inequalities; deriving those inequalities for adaptive strategies
+   remains open.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -363,7 +393,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Counting.tot`, `src/Products.tot`, `src/WordEnumeration.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
-`src/Arithmetic.tot`.
+`src/Arithmetic.tot`, `src/Recurrence.tot`.
 
 ## License
 

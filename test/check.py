@@ -12,7 +12,8 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                  ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
                   "Products.tot", "WordEnumeration.tot", "EnumerationUnique.tot",
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
-                  "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot"))
+                  "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
+                  "Recurrence.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -371,8 +372,87 @@ def arithmeticPower : Eq Nat (scPow twoN (scAdd oneN oneN)) fourN :=
   scPowAdd twoN oneN oneN
 """
 
+RECURRENCE_CHECKS = """
+def addCommAt : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scAdd n m) (scAdd m n) := scAddComm
+def addSwapAt : (a : Nat) -> (b : Nat) -> (c : Nat) ->
+    Eq Nat (scAdd a (scAdd b c)) (scAdd b (scAdd a c)) := scAddSwap
+def mulSuccRightAt : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scMul n (succ m)) (scAdd n (scMul n m)) := scMulSuccRight
+def mulCommAt : (n : Nat) -> (m : Nat) ->
+    Eq Nat (scMul n m) (scMul m n) := scMulComm
+def mulSwapAt : (a : Nat) -> (b : Nat) -> (c : Nat) ->
+    Eq Nat (scMul a (scMul b c)) (scMul b (scMul a c)) := scMulSwap
+def budgetScaledAt : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scMul q (scErrorBudget q d n)) (scMul (scMul n d) (scPow q n)) :=
+  scErrorBudgetScaled
+def budgetSuccessorAt : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scErrorBudget q d (succ n)) (scMul (scMul (succ n) d) (scPow q n)) :=
+  scErrorBudgetSuccessor
+def recurrenceBoundAt : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (f n) (scErrorBudget q d n) := scRecurrenceBound
+def recurrenceScaledBoundAt : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (scMul q (f n)) (scMul (scMul n d) (scPow q n)) := scRecurrenceScaledBound
+"""
+RECURRENCE_EXAMPLES = EXAMPLE + """
+def budgetZeroRounds : Eq Nat (scErrorBudget twoN oneN zero) zero := refl Nat zero
+def budgetOneRound : Eq Nat (scErrorBudget twoN oneN oneN) oneN := refl Nat oneN
+def budgetTwoRounds : Eq Nat (scErrorBudget twoN oneN twoN) fourN := refl Nat fourN
+def budgetThreeRounds : Eq Nat (scErrorBudget twoN oneN (succ twoN))
+    (scMul (succ twoN) fourN) := refl Nat (scMul (succ twoN) fourN)
+def budgetZeroCarrierOne : Eq Nat (scErrorBudget zero twoN oneN) twoN := refl Nat twoN
+def budgetZeroCarrierTwo : Eq Nat (scErrorBudget zero twoN twoN) zero := refl Nat zero
+def budgetZeroDegree : Eq Nat (scErrorBudget twoN zero twoN) zero := refl Nat zero
+def budgetUnitCarrier : Eq Nat (scErrorBudget oneN twoN twoN) fourN := refl Nat fourN
+def budgetScaledConcrete : Eq Nat (scMul twoN (scErrorBudget twoN oneN twoN))
+    (scMul twoN fourN) := scErrorBudgetScaled twoN oneN twoN
+def budgetSuccessorConcrete : Eq Nat (scErrorBudget twoN oneN (succ twoN))
+    (scMul (succ twoN) fourN) := scErrorBudgetSuccessor twoN oneN twoN
+def recurrenceSharp : ScLe (scErrorBudget twoN oneN twoN) fourN :=
+  scRecurrenceBound twoN oneN (scErrorBudget twoN oneN) (scLeZero zero)
+    (fun k => scLeRefl (scErrorBudget twoN oneN (succ k))) twoN
+def recurrenceSlack : ScLe zero (scMul twoN fourN) :=
+  scRecurrenceScaledBound twoN oneN (fun k => zero) (scLeZero zero)
+    (fun k => scLeZero (scAdd (scMul oneN (scPow twoN k)) (scMul twoN zero))) twoN
+def commuteConcrete : Eq Nat (scMul twoN (succ twoN)) (scMul (succ twoN) twoN) :=
+  scMulComm twoN (succ twoN)
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("recurrence", RECURRENCE_CHECKS, None),
+    ("recurrence-examples", RECURRENCE_EXAMPLES, None),
+    ("recurrence-missing-initial", """
+def missingInitial : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (f n) (scErrorBudget q d n) :=
+  fun q d f step n => scRecurrenceBound q d f (scLeRefl (f zero)) step n
+""", "mismatch"),
+    ("recurrence-missing-step", """
+def missingStep : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero -> (n : Nat) -> ScLe (f n) (scErrorBudget q d n) :=
+  fun q d f initial n => scRecurrenceBound q d f initial
+    (fun k => scLeRefl (f (succ k))) n
+""", "mismatch"),
+    ("recurrence-wrong-exponent", """
+def wrongExponent : (q : Nat) -> (d : Nat) -> (n : Nat) ->
+    Eq Nat (scErrorBudget q d (succ n))
+      (scMul (scMul (succ n) d) (scPow q (succ n))) := scErrorBudgetSuccessor
+""", "mismatch"),
+    ("recurrence-omits-scale", """
+def omittedScale : (q : Nat) -> (d : Nat) -> (f : Nat -> Nat) ->
+    ScLe (f zero) zero ->
+    ((k : Nat) -> ScLe (f (succ k))
+      (scAdd (scMul d (scPow q k)) (scMul q (f k)))) -> (n : Nat) ->
+    ScLe (f n) (scMul (scMul n d) (scPow q n)) := scRecurrenceScaledBound
+""", "mismatch"),
     ('arithmetic', ARITHMETIC_CHECKS, None),
     ('arithmetic-examples', ARITHMETIC_EXAMPLES, None),
     ('order-transitivity-reversed', """
