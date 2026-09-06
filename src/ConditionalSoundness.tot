@@ -1,0 +1,90 @@
+-- Each valid round with a false claim must have at most d agreement points.
+-- This is an explicit hypothesis, to be discharged later by polynomial bounds.
+reducible def rec ScAgreementTree : (0 F : Type 0) -> ScFinite F ->
+    (F -> F -> F) -> F -> F -> Nat -> (n : Nat) ->
+    ScStrategy F n -> (List F -> F) -> F -> Type 0 :=
+  fun F finite plus lo hi d n => match n as k return
+      ScStrategy F k -> (List F -> F) -> F -> Type 0 with
+  | zero => fun strategy g claim => ScUnit
+  | succ k => fun strategy g claim => match strategy with
+    | pair message next => Pair
+        (Eq F (plus (message lo) (message hi)) claim ->
+          (Eq F claim (scSum F plus lo hi (succ k) g) -> ScEmpty) ->
+          ScLe (scFiniteCount F
+            (fun r => Eq F (message r) (scMarginal F plus lo hi k g r))
+            (fun r => scDecEq F finite (message r) (scMarginal F plus lo hi k g r))
+            finite) d)
+        ((r : F) -> ScAgreementTree F finite plus lo hi d k
+          (next r) (scRestrict F g r) (message r))
+    end
+  end
+
+def rec scConditionalSoundness : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n) :=
+  fun F finite plus lo hi d n => match n as k return
+      (strategy : ScStrategy F k) -> (g : List F -> F) -> (claim : F) ->
+      ScAgreementTree F finite plus lo hi d k strategy g claim ->
+      (Eq F claim (scSum F plus lo hi k g) -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi k strategy g claim)
+        (scErrorBudget (scCardinality F finite) d k) with
+  | zero => fun strategy g claim tree different => scTransport Nat zero
+      (scAcceptingCount F finite plus lo hi zero strategy g claim)
+      (fun total => ScLe total zero)
+      (scEqSym Nat (scAcceptingCount F finite plus lo hi zero strategy g claim) zero
+        (scFalseZeroAcceptingCount F finite plus lo hi strategy g claim different))
+      (scLeZero zero)
+  | succ k => fun strategy => match strategy as s return
+      (g : List F -> F) -> (claim : F) ->
+      ScAgreementTree F finite plus lo hi d (succ k) s g claim ->
+      (Eq F claim (scSum F plus lo hi (succ k) g) -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi (succ k) s g claim)
+        (scErrorBudget (scCardinality F finite) d (succ k)) with
+    | pair message next => fun g claim tree different => match tree with
+      | pair rare children =>
+        match scDecEq F finite (plus (message lo) (message hi)) claim with
+        | scYes valid => scAcceptingRoundBound F finite plus lo hi k message next
+            g claim (fun r => Eq F (message r) (scMarginal F plus lo hi k g r))
+            (fun r => scDecEq F finite (message r) (scMarginal F plus lo hi k g r))
+            d (scErrorBudget (scCardinality F finite) d k) (rare valid different)
+            (fun r outside => scConditionalSoundness F finite plus lo hi d k
+              (next r) (scRestrict F g r) (message r) (children r) outside)
+        | scNo invalid => scTransport Nat zero
+            (scAcceptingCount F finite plus lo hi (succ k)
+              (pair (F -> F) (F -> ScStrategy F k) message next) g claim)
+            (fun total => ScLe total (scErrorBudget (scCardinality F finite) d (succ k)))
+            (scEqSym Nat (scAcceptingCount F finite plus lo hi (succ k)
+              (pair (F -> F) (F -> ScStrategy F k) message next) g claim) zero
+              (scRejectedRoundCount F finite plus lo hi k message next g claim invalid))
+            (scLeZero (scErrorBudget (scCardinality F finite) d (succ k)))
+        end
+      end
+    end
+  end
+
+-- A denominator-free form, valid even for an empty carrier or zero rounds.
+def scConditionalSoundnessScaled : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scMul (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim))
+      (scMul (scMul n d) (scPow (scCardinality F finite) n)) :=
+  fun F finite plus lo hi d n strategy g claim tree different => scTransport Nat
+    (scMul (scCardinality F finite) (scErrorBudget (scCardinality F finite) d n))
+    (scMul (scMul n d) (scPow (scCardinality F finite) n))
+    (fun upper => ScLe (scMul (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim)) upper)
+    (scErrorBudgetScaled (scCardinality F finite) d n)
+    (scMulMonoLeft (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n)
+      (scConditionalSoundness F finite plus lo hi d n strategy g claim tree different))
+
+check scConditionalSoundness
+check scConditionalSoundnessScaled

@@ -9,6 +9,92 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scConditionalSoundness-trivialized", """def rec scConditionalSoundness : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n) :=
+  fun F finite plus lo hi d n => match n as k return
+      (strategy : ScStrategy F k) -> (g : List F -> F) -> (claim : F) ->
+      ScAgreementTree F finite plus lo hi d k strategy g claim ->
+      (Eq F claim (scSum F plus lo hi k g) -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi k strategy g claim)
+        (scErrorBudget (scCardinality F finite) d k) with
+  | zero => fun strategy g claim tree different => scTransport Nat zero
+      (scAcceptingCount F finite plus lo hi zero strategy g claim)
+      (fun total => ScLe total zero)
+      (scEqSym Nat (scAcceptingCount F finite plus lo hi zero strategy g claim) zero
+        (scFalseZeroAcceptingCount F finite plus lo hi strategy g claim different))
+      (scLeZero zero)
+  | succ k => fun strategy => match strategy as s return
+      (g : List F -> F) -> (claim : F) ->
+      ScAgreementTree F finite plus lo hi d (succ k) s g claim ->
+      (Eq F claim (scSum F plus lo hi (succ k) g) -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi (succ k) s g claim)
+        (scErrorBudget (scCardinality F finite) d (succ k)) with
+    | pair message next => fun g claim tree different => match tree with
+      | pair rare children =>
+        match scDecEq F finite (plus (message lo) (message hi)) claim with
+        | scYes valid => scAcceptingRoundBound F finite plus lo hi k message next
+            g claim (fun r => Eq F (message r) (scMarginal F plus lo hi k g r))
+            (fun r => scDecEq F finite (message r) (scMarginal F plus lo hi k g r))
+            d (scErrorBudget (scCardinality F finite) d k) (rare valid different)
+            (fun r outside => scConditionalSoundness F finite plus lo hi d k
+              (next r) (scRestrict F g r) (message r) (children r) outside)
+        | scNo invalid => scTransport Nat zero
+            (scAcceptingCount F finite plus lo hi (succ k)
+              (pair (F -> F) (F -> ScStrategy F k) message next) g claim)
+            (fun total => ScLe total (scErrorBudget (scCardinality F finite) d (succ k)))
+            (scEqSym Nat (scAcceptingCount F finite plus lo hi (succ k)
+              (pair (F -> F) (F -> ScStrategy F k) message next) g claim) zero
+              (scRejectedRoundCount F finite plus lo hi k message next g claim invalid))
+            (scLeZero (scErrorBudget (scCardinality F finite) d (succ k)))
+        end
+      end
+    end
+  end""",
+     """def scConditionalSoundness : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe zero zero :=
+  fun F finite plus lo hi d n strategy g claim tree different => scLeZero zero""", 1),
+    ("scConditionalSoundnessScaled-trivialized", """def scConditionalSoundnessScaled : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scMul (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim))
+      (scMul (scMul n d) (scPow (scCardinality F finite) n)) :=
+  fun F finite plus lo hi d n strategy g claim tree different => scTransport Nat
+    (scMul (scCardinality F finite) (scErrorBudget (scCardinality F finite) d n))
+    (scMul (scMul n d) (scPow (scCardinality F finite) n))
+    (fun upper => ScLe (scMul (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim)) upper)
+    (scErrorBudgetScaled (scCardinality F finite) d n)
+    (scMulMonoLeft (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n)
+      (scConditionalSoundness F finite plus lo hi d n strategy g claim tree different))""",
+     """def scConditionalSoundnessScaled : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe zero zero :=
+  fun F finite plus lo hi d n strategy g claim tree different => scLeZero zero""", 1),
+    ("agreement-tree-wrong-child-claim", """        ((r : F) -> ScAgreementTree F finite plus lo hi d k
+          (next r) (scRestrict F g r) (message r))""",
+     """        ((r : F) -> ScAgreementTree F finite plus lo hi d k
+          (next r) (scRestrict F g r) claim)""", 1),
+    ("agreement-tree-wrong-child-target", """        ((r : F) -> ScAgreementTree F finite plus lo hi d k
+          (next r) (scRestrict F g r) (message r))""",
+     """        ((r : F) -> ScAgreementTree F finite plus lo hi d k
+          (next r) g (message r))""", 1),
     ('scSumOverMono-trivialized', """def rec scSumOverMono : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
     ((x : A) -> ScLe (f x) (g x)) -> (xs : List A) ->
     ScLe (scSumOver A f xs) (scSumOver A g xs) :=

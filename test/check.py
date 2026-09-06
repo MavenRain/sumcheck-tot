@@ -14,7 +14,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
-                  "EnumerationIndependent.tot", "RoundBounds.tot"))
+                  "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -700,8 +700,158 @@ def scAcceptingRoundBoundAt : (0 F : Type 0) -> (finite : ScFinite F) ->
   scAcceptingRoundBound
 """
 
+CONDITIONAL_SOUNDNESS_CHECKS = """
+def scConditionalSoundnessAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scAcceptingCount F finite plus lo hi n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n) :=
+  scConditionalSoundness
+def scConditionalSoundnessScaledAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScStrategy F n) -> (g : List F -> F) -> (claim : F) ->
+    ScAgreementTree F finite plus lo hi d n strategy g claim ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scMul (scCardinality F finite)
+      (scAcceptingCount F finite plus lo hi n strategy g claim))
+      (scMul (scMul n d) (scPow (scCardinality F finite) n)) :=
+  scConditionalSoundnessScaled
+"""
+
+CONDITIONAL_SOUNDNESS_EXAMPLE = EXAMPLE + """
+reducible def soundPlus : ScBit -> ScBit -> ScBit := fun x y => x
+reducible def soundGoal : List ScBit -> ScBit := fun xs => scLow
+reducible def soundMessage : ScBit -> ScBit := fun r => match r with
+| scLow => scHigh | scHigh => scLow end
+reducible def soundOne : ScStrategy ScBit oneN :=
+  pair (ScBit -> ScBit) (ScBit -> ScStrategy ScBit zero) soundMessage (fun r => scUnit)
+def soundOneTree : ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh
+    oneN oneN soundOne soundGoal scHigh :=
+  pair (Eq ScBit (soundPlus (soundMessage scLow) (soundMessage scHigh)) scHigh ->
+    (Eq ScBit scHigh (scSum ScBit soundPlus scLow scHigh oneN soundGoal) -> ScEmpty) ->
+    ScLe (scFiniteCount ScBit
+      (fun r => Eq ScBit (soundMessage r) (scMarginal ScBit soundPlus scLow scHigh zero soundGoal r))
+      (fun r => scBitDecEq (soundMessage r)
+        (scMarginal ScBit soundPlus scLow scHigh zero soundGoal r)) scBitFinite) oneN) (ScBit -> ScUnit)
+    (fun valid different => scLeRefl oneN) (fun r => scUnit)
+reducible def soundTwo : ScStrategy ScBit twoN :=
+  pair (ScBit -> ScBit) (ScBit -> ScStrategy ScBit oneN) soundMessage (fun r => match r with
+    | scLow => soundOne
+    | scHigh => scHonestStrategy ScBit soundPlus scLow scHigh oneN soundGoal
+    end)
+def soundTwoTree : ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh
+    oneN twoN soundTwo soundGoal scHigh :=
+  pair (Eq ScBit (soundPlus (soundMessage scLow) (soundMessage scHigh)) scHigh ->
+    (Eq ScBit scHigh (scSum ScBit soundPlus scLow scHigh twoN soundGoal) -> ScEmpty) ->
+    ScLe (scFiniteCount ScBit
+      (fun r => Eq ScBit (soundMessage r) (scMarginal ScBit soundPlus scLow scHigh oneN soundGoal r))
+      (fun r => scBitDecEq (soundMessage r)
+        (scMarginal ScBit soundPlus scLow scHigh oneN soundGoal r)) scBitFinite) oneN) ((r : ScBit) ->
+      ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh oneN oneN
+        (match r with | scLow => soundOne
+         | scHigh => scHonestStrategy ScBit soundPlus scLow scHigh oneN soundGoal end)
+        (scRestrict ScBit soundGoal r) (soundMessage r))
+    (fun valid different => scLeRefl oneN)
+    (fun r => match r as x return ScAgreementTree ScBit scBitFinite
+        soundPlus scLow scHigh oneN oneN
+        (match x with | scLow => soundOne
+         | scHigh => scHonestStrategy ScBit soundPlus scLow scHigh oneN soundGoal end)
+        (scRestrict ScBit soundGoal x) (soundMessage x) with
+    | scLow => soundOneTree
+    | scHigh => pair
+        (Eq ScBit scLow scLow -> (Eq ScBit scLow scLow -> ScEmpty) -> ScLe twoN oneN)
+        (ScBit -> ScUnit)
+        (fun valid different => match different (refl ScBit scLow) with end)
+        (fun r => scUnit)
+    end)
+reducible def soundRejected : ScStrategy ScBit oneN :=
+  scHonestStrategy ScBit soundPlus scLow scHigh oneN soundGoal
+def soundRejectedTree : ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh
+    zero oneN soundRejected soundGoal scHigh :=
+  pair (Eq ScBit scLow scHigh -> (Eq ScBit scHigh scLow -> ScEmpty) -> ScLe twoN zero)
+    (ScBit -> ScUnit)
+    (fun valid different => match scLowNeHigh valid with end) (fun r => scUnit)
+"""
+
+CONDITIONAL_SOUNDNESS_EXAMPLES = CONDITIONAL_SOUNDNESS_EXAMPLE + """
+def sharpSoundness : ScLe
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh oneN
+      soundOne soundGoal scHigh) oneN :=
+  scConditionalSoundness ScBit scBitFinite soundPlus scLow scHigh oneN oneN
+    soundOne soundGoal scHigh soundOneTree scHighNeLow
+def sharpCount : Eq Nat
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh oneN
+      soundOne soundGoal scHigh) oneN := refl Nat oneN
+def adaptiveSoundness : ScLe
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh twoN
+      soundTwo soundGoal scHigh) fourN :=
+  scConditionalSoundness ScBit scBitFinite soundPlus scLow scHigh oneN twoN
+    soundTwo soundGoal scHigh soundTwoTree scHighNeLow
+def adaptiveCount : Eq Nat
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh twoN
+      soundTwo soundGoal scHigh) (succ twoN) := refl Nat (succ twoN)
+def scaledSoundness : ScLe
+    (scMul twoN (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh twoN
+      soundTwo soundGoal scHigh)) (scMul fourN twoN) :=
+  scConditionalSoundnessScaled ScBit scBitFinite soundPlus scLow scHigh oneN twoN
+    soundTwo soundGoal scHigh soundTwoTree scHighNeLow
+def terminalSoundness : ScLe
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh zero
+      scUnit soundGoal scHigh) zero :=
+  scConditionalSoundness ScBit scBitFinite soundPlus scLow scHigh zero zero
+    scUnit soundGoal scHigh scUnit scHighNeLow
+def rejectedSoundness : ScLe
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh oneN
+      soundRejected soundGoal scHigh) zero :=
+  scConditionalSoundness ScBit scBitFinite soundPlus scLow scHigh zero oneN
+    soundRejected soundGoal scHigh soundRejectedTree scHighNeLow
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("conditional-soundness", CONDITIONAL_SOUNDNESS_CHECKS, None),
+    ("conditional-soundness-examples", CONDITIONAL_SOUNDNESS_EXAMPLES, None),
+    ("soundness-missing-tree", CONDITIONAL_SOUNDNESS_EXAMPLE + """
+def missingTree : ScLe
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh oneN
+      soundOne soundGoal scHigh) oneN :=
+  scConditionalSoundness ScBit scBitFinite soundPlus scLow scHigh oneN oneN
+    soundOne soundGoal scHigh scUnit scHighNeLow
+""", "mismatch"),
+    ("soundness-missing-falsity", CONDITIONAL_SOUNDNESS_EXAMPLE + """
+def missingFalsity : ScLe
+    (scAcceptingCount ScBit scBitFinite soundPlus scLow scHigh oneN
+      soundOne soundGoal scHigh) oneN :=
+  scConditionalSoundness ScBit scBitFinite soundPlus scLow scHigh oneN oneN
+    soundOne soundGoal scHigh soundOneTree
+""", "mismatch"),
+    ("soundness-tree-missing-rarity", CONDITIONAL_SOUNDNESS_EXAMPLE + """
+def missingRarity : ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh
+    oneN oneN soundOne soundGoal scHigh :=
+  pair (Eq ScBit (soundPlus (soundMessage scLow) (soundMessage scHigh)) scHigh ->
+    (Eq ScBit scHigh (scSum ScBit soundPlus scLow scHigh oneN soundGoal) -> ScEmpty) ->
+    ScLe (scFiniteCount ScBit
+      (fun r => Eq ScBit (soundMessage r) (scMarginal ScBit soundPlus scLow scHigh zero soundGoal r))
+      (fun r => scBitDecEq (soundMessage r)
+        (scMarginal ScBit soundPlus scLow scHigh zero soundGoal r)) scBitFinite) oneN) (ScBit -> ScUnit) scUnit (fun r => scUnit)
+""", "mismatch"),
+    ("soundness-tree-missing-children", CONDITIONAL_SOUNDNESS_EXAMPLE + """
+def missingChildren : ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh
+    oneN twoN soundTwo soundGoal scHigh :=
+  pair (Eq ScBit (soundPlus (soundMessage scLow) (soundMessage scHigh)) scHigh ->
+    (Eq ScBit scHigh (scSum ScBit soundPlus scLow scHigh twoN soundGoal) -> ScEmpty) ->
+    ScLe (scFiniteCount ScBit
+      (fun r => Eq ScBit (soundMessage r) (scMarginal ScBit soundPlus scLow scHigh oneN soundGoal r))
+      (fun r => scBitDecEq (soundMessage r)
+        (scMarginal ScBit soundPlus scLow scHigh oneN soundGoal r)) scBitFinite) oneN) ((r : ScBit) ->
+      ScAgreementTree ScBit scBitFinite soundPlus scLow scHigh oneN oneN
+        (match r with | scLow => soundOne
+         | scHigh => scHonestStrategy ScBit soundPlus scLow scHigh oneN soundGoal end)
+        (scRestrict ScBit soundGoal r) (soundMessage r))
+    (fun valid different => scLeRefl oneN) (fun r => scUnit)
+""", "mismatch"),
     ("round-bounds", ROUND_BOUND_CHECKS, None),
     ("exceptional-sum-examples", EXAMPLE + """
 reducible def lowException : ScBit -> Type 0 := fun r => Eq ScBit r scLow

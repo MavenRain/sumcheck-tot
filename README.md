@@ -39,6 +39,9 @@ vectors can be counted exactly: honest play accepts all `|F|^n` vectors,
 false zero-round claims accept none, and a valid first-round check splits
 the count into a sum over adaptive continuations. A failed first-round check
 gives count zero.
+Under an explicit agreement-count hypothesis throughout the strategy tree,
+false claims now satisfy `|F| * acceptingCount <= n * d * |F|^n`. Discharging
+that hypothesis from polynomial degree and root bounds remains future work.
 
 ## Check
 
@@ -237,21 +240,25 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all eighty-eight checks passed with checker SHA-256
+On 2026-09-06, all ninety-four checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The eighty-eight checks:
+The ninety-four checks:
 
+- All generic proofs check without a prelude or axioms.
+- Conditional soundness: both theorem statements check at abstract arguments.
+  Examples cover a sharp one-round bound, an adaptive strategy accepting three
+  of four vectors, the scaled bound, zero rounds, and rejection with zero budget.
+  Four rejection controls require the agreement tree, initial falsity, local
+  rarity evidence, and evidence for the continuation trees.
 - Conditional round bounds: abstract statements for six supporting and round
   theorems, mixed exceptional weights, empty and repeated lists, zero caps,
   no exceptions, adaptive continuations, rejected heads, and the last round.
   Four rejection controls require the global cap, the bound outside the
   exceptional set, its count bound, and the continuation bound.
-
-- All generic proofs check without a prelude or axioms.
 - All eleven enumeration-independence and supporting sum theorems check at
   abstract arguments.
 - Enumeration examples reverse the carrier order and equality decision,
@@ -374,9 +381,12 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check ninety-one deliberate mutations in memory. All were caught.
-Six mutations trivialize the new sum and round bounds. Abstract statement
-checks pin their public types even when concrete arithmetic would normalize.
+suite and check ninety-five deliberate mutations in memory. All were caught.
+Four mutations weaken conditional soundness or corrupt a continuation's claim
+or target. Generic proofs catch the budget theorem and both tree mutations;
+the abstract soundness check catches the scaled theorem weakening.
+Six mutations trivialize the sum and round bounds. Generic proofs catch all
+six now that conditional soundness consumes the accepting-round theorem.
 Eleven mutations replace the enumeration-independence and supporting sum
 theorems with reflexive equalities while retaining their premises. Generic
 consumers catch nine; the abstract enumeration checks catch the cardinality
@@ -508,9 +518,32 @@ decomposition; an invalid check gives zero acceptance.
 This theorem permits any decidable exceptional predicate. It does not prove
 that agreement with the honest marginal is rare, or that false continuation
 claims satisfy the induction hypothesis. Substituting `scErrorBudget q d n`
-for `b` gives the successor budget, but establishing those hypotheses across
-the strategy tree remains necessary. Polynomial degree constraints and a
-root bound are still absent, so this is a conditional counting result.
+for `b` gives the successor budget. The conditional soundness theorem below
+now composes this step throughout a strategy tree. Polynomial degree
+constraints and a root bound are still absent, so this is a conditional
+counting result.
+
+## Conditional soundness
+
+`src/ConditionalSoundness.tot` connects the adaptive round bound to the full
+counting induction. `ScAgreementTree` requires, at each node, at most `d`
+agreement points between its message and the honest marginal whenever the
+round check is valid and the current claim is false. It also requires this
+same evidence for every continuation, with the target restricted by the
+challenge and the next claim set to the message evaluation. At zero rounds,
+the tree obligation is trivial. No accepting-count bound is assumed.
+
+`scConditionalSoundness` proves that a false initial claim and this tree
+hypothesis imply `acceptingCount <= scErrorBudget |F| d n`. A false terminal
+claim accepts zero vectors. At a valid round, agreement points receive the
+full continuation cap, while disagreement is exactly the false-claim premise
+needed by the induction hypothesis. Invalid round checks accept zero vectors.
+
+`scConditionalSoundnessScaled` derives
+`|F| * acceptingCount <= n * d * |F|^n`. This natural-number statement needs
+no division or positivity assumptions. It remains conditional: polynomial
+messages, degree preservation, and a root bound must still discharge the
+agreement-tree hypothesis. A probability interpretation is not yet formalized.
 
 ## Next milestones
 
@@ -519,17 +552,17 @@ root bound are still absent, so this is a conditional counting result.
    fiber decomposition, and uniform fiber bounds are proved. The arithmetic
    recurrence and its scaled closed form are proved conditionally on initial
    and step inequalities. A conditional adaptive round bound now supplies the
-   step from an exceptional-set count and bounds on other continuations;
-   establishing these hypotheses throughout a strategy tree remains open.
+   step from an exceptional-set count and bounds on other continuations.
+   Conditional soundness now composes it across the strategy tree.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
 4. Adaptive strategies, enforced round counts, decidable acceptance, and the
-   exact first-round count decomposition are proved. Add degree constraints
-   and bound accepting challenge vectors for false claims by induction. Target
-   `|F| * acceptingCount <= n * d * |F|^n` for individual degree at most d.
+   exact first-round count decomposition are proved. The false-claim bound
+   `|F| * acceptingCount <= n * d * |F|^n` is proved under `ScAgreementTree`.
+   Add degree constraints and discharge that hypothesis from the root bound.
 5. Interpret that count under independent uniform challenges to obtain
    soundness error at most `n*d/|F|`. If intermediate results take a root
    bound as a hypothesis, label them conditional until it is discharged.
@@ -540,7 +573,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
 `src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
-`src/RoundBounds.tot`.
+`src/RoundBounds.tot`, `src/ConditionalSoundness.tot`.
 
 ## License
 
