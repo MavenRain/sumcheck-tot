@@ -237,13 +237,19 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all eighty-one checks passed with checker SHA-256
+On 2026-09-06, all eighty-eight checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The eighty-one checks:
+The eighty-eight checks:
+
+- Conditional round bounds: abstract statements for six supporting and round
+  theorems, mixed exceptional weights, empty and repeated lists, zero caps,
+  no exceptions, adaptive continuations, rejected heads, and the last round.
+  Four rejection controls require the global cap, the bound outside the
+  exceptional set, its count bound, and the continuation bound.
 
 - All generic proofs check without a prelude or axioms.
 - All eleven enumeration-independence and supporting sum theorems check at
@@ -368,7 +374,9 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check eighty-five deliberate mutations in memory. All were caught.
+suite and check ninety-one deliberate mutations in memory. All were caught.
+Six mutations trivialize the new sum and round bounds. Abstract statement
+checks pin their public types even when concrete arithmetic would normalize.
 Eleven mutations replace the enumeration-independence and supporting sum
 theorems with reflexive equalities while retaining their premises. Generic
 consumers catch nine; the abstract enumeration checks catch the cardinality
@@ -481,14 +489,38 @@ The supporting sum lemmas retain multiplicity on arbitrary lists. Only the
 finite-package results use complete, duplicate-free enumerations. This
 milestone does not add degree constraints or a soundness theorem.
 
+## Conditional round bounds
+
+`src/RoundBounds.tot` supplies the counting step for a future soundness
+induction. `scSumOverExceptionalBound` bounds a natural-valued weight by
+`exceptionCount * cap + length * b`, given a global cap and a bound `b`
+outside a decidable exceptional set. The proof sums pointwise inequalities
+and counts the exceptional allowance exactly. It retains multiplicity on
+arbitrary lists and needs no positivity assumptions.
+
+`scAcceptingRoundBound` applies this to adaptive continuation counts. If
+at most `d` challenges are exceptional and every other continuation accepts
+at most `b` vectors, then a round with `n` remaining challenges satisfies
+`acceptingCount <= d * |F|^n + |F| * b`. The global cap is discharged by
+`scAcceptingCountBound`. A valid first-round check uses the exact count
+decomposition; an invalid check gives zero acceptance.
+
+This theorem permits any decidable exceptional predicate. It does not prove
+that agreement with the honest marginal is rare, or that false continuation
+claims satisfy the induction hypothesis. Substituting `scErrorBudget q d n`
+for `b` gives the successor budget, but establishing those hypotheses across
+the strategy tree remains necessary. Polynomial degree constraints and a
+root bound are still absent, so this is a conditional counting result.
+
 ## Next milestones
 
 1. Finite enumeration independence is proved. Predicate monotonicity,
    decision independence, append additivity, the binary union bound, product
    fiber decomposition, and uniform fiber bounds are proved. The arithmetic
    recurrence and its scaled closed form are proved conditionally on initial
-   and step inequalities; deriving those inequalities for adaptive strategies
-   remains open.
+   and step inequalities. A conditional adaptive round bound now supplies the
+   step from an exceptional-set count and bounds on other continuations;
+   establishing these hypotheses throughout a strategy tree remains open.
 2. Define polynomial messages, evaluation, restriction, degree bounds, and
    field operations with explicit laws. Prove honest marginals preserve
    the required degree bound, then extend acceptance and completeness.
@@ -507,7 +539,8 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/EnumerationUnique.tot`, `src/FiniteProducts.tot`, `src/FiniteVectors.tot`,
 `src/VectorEnumeration.tot`, `src/CountingAlgebra.tot`, `src/FiberCounting.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
-`src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`.
+`src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
+`src/RoundBounds.tot`.
 
 ## License
 

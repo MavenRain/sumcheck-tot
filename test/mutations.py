@@ -9,6 +9,189 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ('scSumOverMono-trivialized', """def rec scSumOverMono : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    ((x : A) -> ScLe (f x) (g x)) -> (xs : List A) ->
+    ScLe (scSumOver A f xs) (scSumOver A g xs) :=
+  fun A f g bounded xs => match xs as ys return
+      ScLe (scSumOver A f ys) (scSumOver A g ys) with
+  | nil => scLeZero zero
+  | cons x rest => scAddLe (f x) (g x) (bounded x)
+      (scSumOver A f rest) (scSumOver A g rest)
+      (scSumOverMono A f g bounded rest)
+  end""",
+     """def scSumOverMono : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    ((x : A) -> ScLe (f x) (g x)) -> (xs : List A) ->
+    ScLe zero zero :=
+  fun A f g bounded xs => scLeZero zero""", 1),
+    ('scSumOverConstant-trivialized', """def rec scSumOverConstant : (0 A : Type 0) -> (b : Nat) -> (xs : List A) ->
+    Eq Nat (scSumOver A (fun x => b) xs) (scMul (scLength A xs) b) :=
+  fun A b xs => match xs as ys return
+      Eq Nat (scSumOver A (fun x => b) ys) (scMul (scLength A ys) b) with
+  | nil => refl Nat zero
+  | cons x rest => scCong Nat Nat (scAdd b)
+      (scSumOver A (fun x => b) rest) (scMul (scLength A rest) b)
+      (scSumOverConstant A b rest)
+  end""",
+     """def scSumOverConstant : (0 A : Type 0) -> (b : Nat) -> (xs : List A) ->
+    Eq Nat zero zero :=
+  fun A b xs => refl Nat zero""", 1),
+    ('scExceptionAllowanceSum-trivialized', """def rec scExceptionAllowanceSum : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (cap : Nat) -> (xs : List A) ->
+    Eq Nat (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs)
+      (scMul (scCount A P decide xs) cap) :=
+  fun A P decide cap xs => match xs as ys return
+      Eq Nat (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) ys)
+        (scMul (scCount A P decide ys) cap) with
+  | nil => refl Nat zero
+  | cons x rest => match decide x as d return
+      Eq Nat (scAdd (scExceptionAllowance (P x) d cap)
+        (scSumOver A (fun y => scExceptionAllowance (P y) (decide y) cap) rest))
+        (scMul (scTally (P x) d (scCount A P decide rest)) cap) with
+    | scYes proof => scCong Nat Nat (scAdd cap)
+        (scSumOver A (fun y => scExceptionAllowance (P y) (decide y) cap) rest)
+        (scMul (scCount A P decide rest) cap)
+        (scExceptionAllowanceSum A P decide cap rest)
+    | scNo refute => scExceptionAllowanceSum A P decide cap rest
+    end
+  end""",
+     """def scExceptionAllowanceSum : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (cap : Nat) -> (xs : List A) ->
+    Eq Nat zero zero :=
+  fun A P decide cap xs => refl Nat zero""", 1),
+    ('scExceptionPointBound-trivialized', """def scExceptionPointBound : (0 P : Type 0) -> (decision : ScDec P) ->
+    (weight : Nat) -> (cap : Nat) -> (b : Nat) -> ScLe weight cap ->
+    ((P -> ScEmpty) -> ScLe weight b) ->
+    ScLe weight (scAdd b (scExceptionAllowance P decision cap)) :=
+  fun P decision weight cap b bounded outside => match decision as d return
+      ScLe weight (scAdd b (scExceptionAllowance P d cap)) with
+  | scYes proof => scLeAddLeft b weight cap bounded
+  | scNo refute => scTransport Nat b (scAdd b zero) (fun upper => ScLe weight upper)
+      (scEqSym Nat (scAdd b zero) b (scAddZeroRight b)) (outside refute)
+  end""",
+     """def scExceptionPointBound : (0 P : Type 0) -> (decision : ScDec P) ->
+    (weight : Nat) -> (cap : Nat) -> (b : Nat) -> ScLe weight cap ->
+    ((P -> ScEmpty) -> ScLe weight b) ->
+    ScLe zero zero :=
+  fun P decision weight cap b bounded outside => scLeZero zero""", 1),
+    ('scSumOverExceptionalBound-trivialized', """def scSumOverExceptionalBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (weight : A -> Nat) ->
+    (cap : Nat) -> (b : Nat) -> ((x : A) -> ScLe (weight x) cap) ->
+    ((x : A) -> (P x -> ScEmpty) -> ScLe (weight x) b) -> (xs : List A) ->
+    ScLe (scSumOver A weight xs)
+      (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b)) :=
+  fun A P decide weight cap b bounded outside xs => scTransport Nat
+    (scSumOver A (fun x => scAdd b (scExceptionAllowance (P x) (decide x) cap)) xs)
+    (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b))
+    (fun upper => ScLe (scSumOver A weight xs) upper)
+    (scEqTrans Nat
+      (scSumOver A (fun x => scAdd b (scExceptionAllowance (P x) (decide x) cap)) xs)
+      (scAdd (scSumOver A (fun x => b) xs)
+        (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs))
+      (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b))
+      (scSumOverAdd A (fun x => b)
+        (fun x => scExceptionAllowance (P x) (decide x) cap) xs)
+      (scEqTrans Nat
+        (scAdd (scSumOver A (fun x => b) xs)
+          (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs))
+        (scAdd (scMul (scLength A xs) b) (scMul (scCount A P decide xs) cap))
+        (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b))
+        (scEqTrans Nat
+          (scAdd (scSumOver A (fun x => b) xs)
+            (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs))
+          (scAdd (scMul (scLength A xs) b)
+            (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs))
+          (scAdd (scMul (scLength A xs) b) (scMul (scCount A P decide xs) cap))
+          (scCong Nat Nat
+            (fun total => scAdd total
+              (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs))
+            (scSumOver A (fun x => b) xs) (scMul (scLength A xs) b)
+            (scSumOverConstant A b xs))
+          (scCong Nat Nat (scAdd (scMul (scLength A xs) b))
+            (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs)
+            (scMul (scCount A P decide xs) cap)
+            (scExceptionAllowanceSum A P decide cap xs)))
+        (scAddComm (scMul (scLength A xs) b) (scMul (scCount A P decide xs) cap))))
+    (scSumOverMono A weight
+      (fun x => scAdd b (scExceptionAllowance (P x) (decide x) cap))
+      (fun x => scExceptionPointBound (P x) (decide x) (weight x) cap b
+        (bounded x) (outside x)) xs)""",
+     """def scSumOverExceptionalBound : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (weight : A -> Nat) ->
+    (cap : Nat) -> (b : Nat) -> ((x : A) -> ScLe (weight x) cap) ->
+    ((x : A) -> (P x -> ScEmpty) -> ScLe (weight x) b) -> (xs : List A) ->
+    ScLe zero zero :=
+  fun A P decide weight cap b bounded outside xs => scLeZero zero""", 1),
+    ('scAcceptingRoundBound-trivialized', """def scAcceptingRoundBound : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) -> (0 P : F -> Type 0) ->
+    (decide : (r : F) -> ScDec (P r)) -> (d : Nat) -> (b : Nat) ->
+    ScLe (scFiniteCount F P decide finite) d ->
+    ((r : F) -> (P r -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi n (next r)
+        (scRestrict F g r) (message r)) b) ->
+    ScLe (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scAdd (scMul d (scPow (scCardinality F finite) n))
+        (scMul (scCardinality F finite) b)) :=
+  fun F finite plus lo hi n message next g claim P decide d b rare outside =>
+    match scDecEq F finite (plus (message lo) (message hi)) claim with
+    | scYes valid => scTransport Nat
+        (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+          (next r) (scRestrict F g r) (message r)) (scElements F finite))
+        (scAcceptingCount F finite plus lo hi (succ n)
+          (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+        (fun total => ScLe total
+          (scAdd (scMul d (scPow (scCardinality F finite) n))
+            (scMul (scCardinality F finite) b)))
+        (scEqSym Nat (scAcceptingCount F finite plus lo hi (succ n)
+          (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+          (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+            (next r) (scRestrict F g r) (message r)) (scElements F finite))
+          (scAcceptingCountStep F finite plus lo hi n message next g claim valid))
+        (scLeTrans
+          (scSumOver F (fun r => scAcceptingCount F finite plus lo hi n
+            (next r) (scRestrict F g r) (message r)) (scElements F finite))
+          (scAdd (scMul (scFiniteCount F P decide finite)
+            (scPow (scCardinality F finite) n)) (scMul (scCardinality F finite) b))
+          (scSumOverExceptionalBound F P decide
+            (fun r => scAcceptingCount F finite plus lo hi n
+              (next r) (scRestrict F g r) (message r))
+            (scPow (scCardinality F finite) n) b
+            (fun r => scAcceptingCountBound F finite plus lo hi n
+              (next r) (scRestrict F g r) (message r)) outside (scElements F finite))
+          (scAdd (scMul d (scPow (scCardinality F finite) n))
+            (scMul (scCardinality F finite) b))
+          (scAddLe
+            (scMul (scFiniteCount F P decide finite) (scPow (scCardinality F finite) n))
+            (scMul d (scPow (scCardinality F finite) n))
+            (scMulMonoRight (scFiniteCount F P decide finite) d rare
+              (scPow (scCardinality F finite) n))
+            (scMul (scCardinality F finite) b) (scMul (scCardinality F finite) b)
+            (scLeRefl (scMul (scCardinality F finite) b))))
+    | scNo invalid => scTransport Nat zero
+        (scAcceptingCount F finite plus lo hi (succ n)
+          (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+        (fun total => ScLe total
+          (scAdd (scMul d (scPow (scCardinality F finite) n))
+            (scMul (scCardinality F finite) b)))
+        (scEqSym Nat (scAcceptingCount F finite plus lo hi (succ n)
+          (pair (F -> F) (F -> ScStrategy F n) message next) g claim) zero
+          (scRejectedRoundCount F finite plus lo hi n message next g claim invalid))
+        (scLeZero (scAdd (scMul d (scPow (scCardinality F finite) n))
+          (scMul (scCardinality F finite) b)))
+    end""",
+     """def scAcceptingRoundBound : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) -> (0 P : F -> Type 0) ->
+    (decide : (r : F) -> ScDec (P r)) -> (d : Nat) -> (b : Nat) ->
+    ScLe (scFiniteCount F P decide finite) d ->
+    ((r : F) -> (P r -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi n (next r)
+        (scRestrict F g r) (message r)) b) ->
+    ScLe zero zero :=
+  fun F finite plus lo hi n message next g claim P decide d b rare outside => scLeZero zero""", 1),
     ("scSumOverZero-trivialized", """def rec scSumOverZero : (0 A : Type 0) -> (xs : List A) ->
     Eq Nat (scSumOver A (fun x => zero) xs) zero :=
   fun A xs => match xs as ys return

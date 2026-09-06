@@ -14,7 +14,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "FiniteProducts.tot", "FiniteVectors.tot", "VectorEnumeration.tot",
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
-                  "EnumerationIndependent.tot"))
+                  "EnumerationIndependent.tot", "RoundBounds.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -659,8 +659,177 @@ def zeroRoundIndependent : Eq Nat
     zero scUnit bitGoal scLow
 """
 
+ROUND_BOUND_CHECKS = """
+def scSumOverMonoAt : (0 A : Type 0) -> (f : A -> Nat) -> (g : A -> Nat) ->
+    ((x : A) -> ScLe (f x) (g x)) -> (xs : List A) ->
+    ScLe (scSumOver A f xs) (scSumOver A g xs) :=
+  scSumOverMono
+def scSumOverConstantAt : (0 A : Type 0) -> (b : Nat) -> (xs : List A) ->
+    Eq Nat (scSumOver A (fun x => b) xs) (scMul (scLength A xs) b) :=
+  scSumOverConstant
+def scExceptionAllowanceSumAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (cap : Nat) -> (xs : List A) ->
+    Eq Nat (scSumOver A (fun x => scExceptionAllowance (P x) (decide x) cap) xs)
+      (scMul (scCount A P decide xs) cap) :=
+  scExceptionAllowanceSum
+def scExceptionPointBoundAt : (0 P : Type 0) -> (decision : ScDec P) ->
+    (weight : Nat) -> (cap : Nat) -> (b : Nat) -> ScLe weight cap ->
+    ((P -> ScEmpty) -> ScLe weight b) ->
+    ScLe weight (scAdd b (scExceptionAllowance P decision cap)) :=
+  scExceptionPointBound
+def scSumOverExceptionalBoundAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (weight : A -> Nat) ->
+    (cap : Nat) -> (b : Nat) -> ((x : A) -> ScLe (weight x) cap) ->
+    ((x : A) -> (P x -> ScEmpty) -> ScLe (weight x) b) -> (xs : List A) ->
+    ScLe (scSumOver A weight xs)
+      (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b)) :=
+  scSumOverExceptionalBound
+def scAcceptingRoundBoundAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) -> (0 P : F -> Type 0) ->
+    (decide : (r : F) -> ScDec (P r)) -> (d : Nat) -> (b : Nat) ->
+    ScLe (scFiniteCount F P decide finite) d ->
+    ((r : F) -> (P r -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi n (next r)
+        (scRestrict F g r) (message r)) b) ->
+    ScLe (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scAdd (scMul d (scPow (scCardinality F finite) n))
+        (scMul (scCardinality F finite) b)) :=
+  scAcceptingRoundBound
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("round-bounds", ROUND_BOUND_CHECKS, None),
+    ("exceptional-sum-examples", EXAMPLE + """
+reducible def lowException : ScBit -> Type 0 := fun r => Eq ScBit r scLow
+reducible def lowDecision : (r : ScBit) -> ScDec (lowException r) :=
+  fun r => scBitDecEq r scLow
+reducible def mixedWeight : ScBit -> Nat := fun r => match r with
+  | scLow => twoN | scHigh => oneN end
+def mixedCap : (r : ScBit) -> ScLe (mixedWeight r) twoN :=
+  fun r => match r as s return ScLe (mixedWeight s) twoN with
+  | scLow => scLeRefl twoN
+  | scHigh => scLeSucc zero oneN (scLeZero oneN)
+  end
+def mixedOutside : (r : ScBit) -> (lowException r -> ScEmpty) ->
+    ScLe (mixedWeight r) oneN :=
+  fun r => match r as s return (lowException s -> ScEmpty) ->
+      ScLe (mixedWeight s) oneN with
+  | scLow => fun refute => match refute (refl ScBit scLow) with end
+  | scHigh => fun refute => scLeRefl oneN
+  end
+def mixedBound : ScLe (scSumOver ScBit mixedWeight scBits) fourN :=
+  scSumOverExceptionalBound ScBit lowException lowDecision mixedWeight
+    twoN oneN mixedCap mixedOutside scBits
+def mixedTotal : Eq Nat (scSumOver ScBit mixedWeight scBits) (succ twoN) :=
+  refl Nat (succ twoN)
+def emptyBound : ScLe zero zero :=
+  scSumOverExceptionalBound ScBit lowException lowDecision mixedWeight
+    twoN oneN mixedCap mixedOutside (nil ScBit)
+def duplicateAllowance : Eq Nat
+    (scSumOver ScBit (fun r => scExceptionAllowance (lowException r)
+      (lowDecision r) twoN) (cons ScBit scLow (cons ScBit scLow (nil ScBit))))
+    fourN := scExceptionAllowanceSum ScBit lowException lowDecision twoN
+      (cons ScBit scLow (cons ScBit scLow (nil ScBit)))
+def noExceptions : Eq Nat
+    (scSumOver ScBit (fun r => scExceptionAllowance ScEmpty
+      (scNo ScEmpty (fun h => h)) twoN) scBits) zero :=
+  scExceptionAllowanceSum ScBit (fun r => ScEmpty)
+    (fun r => scNo ScEmpty (fun h => h)) twoN scBits
+def zeroCap : Eq Nat
+    (scSumOver ScBit (fun r => scExceptionAllowance (lowException r)
+      (lowDecision r) zero) scBits) zero :=
+  scExceptionAllowanceSum ScBit lowException lowDecision zero scBits
+""", None),
+    ("round-bound-examples", ACCEPTANCE_EXAMPLE + """
+reducible def nextBit : ScBit -> ScStrategy ScBit oneN :=
+  fun r => pair (ScBit -> ScBit) (ScBit -> ScUnit)
+    (fun s => scLow) (fun s => scUnit)
+def outsideLow : (r : ScBit) -> (Eq ScBit r scLow -> ScEmpty) ->
+    ScLe (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh oneN
+      (nextBit r) (scRestrict ScBit bitGoal r) r) zero :=
+  fun r => match r as s return (Eq ScBit s scLow -> ScEmpty) ->
+      ScLe (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh oneN
+        (nextBit s) (scRestrict ScBit bitGoal s) s) zero with
+  | scLow => fun refute => match refute (refl ScBit scLow) with end
+  | scHigh => fun refute => scLeZero zero
+  end
+def adaptiveBound : ScLe (bitAcceptCount scLow) twoN :=
+  scAcceptingRoundBound ScBit scBitFinite bitPlus scLow scHigh oneN
+    (fun r => r) nextBit bitGoal scLow (fun r => Eq ScBit r scLow)
+    (fun r => scBitDecEq r scLow) oneN zero (scLeRefl oneN) outsideLow
+def rejectedBound : ScLe (bitAcceptCount scHigh) twoN :=
+  scAcceptingRoundBound ScBit scBitFinite bitPlus scLow scHigh oneN
+    (fun r => r) nextBit bitGoal scHigh (fun r => Eq ScBit r scLow)
+    (fun r => scBitDecEq r scLow) oneN zero (scLeRefl oneN) outsideLow
+def terminalOutside : (r : ScBit) -> (Eq ScBit r scLow -> ScEmpty) ->
+    ScLe (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh zero
+      scUnit (scRestrict ScBit bitGoal r) r) zero :=
+  fun r refute => scTransport Nat zero
+    (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh zero
+      scUnit (scRestrict ScBit bitGoal r) r) (fun total => ScLe total zero)
+    (scEqSym Nat (scAcceptingCount ScBit scBitFinite bitPlus scLow scHigh zero
+      scUnit (scRestrict ScBit bitGoal r) r) zero
+      (scFalseZeroAcceptingCount ScBit scBitFinite bitPlus scLow scHigh
+        scUnit (scRestrict ScBit bitGoal r) r refute)) (scLeZero zero)
+def lastRoundBound : ScLe (scAcceptingCount ScBit scBitFinite bitPlus scLow
+    scHigh oneN (pair (ScBit -> ScBit) (ScBit -> ScUnit)
+      (fun r => r) (fun r => scUnit)) bitGoal scLow) oneN :=
+  scAcceptingRoundBound ScBit scBitFinite bitPlus scLow scHigh zero
+    (fun r => r) (fun r => scUnit) bitGoal scLow (fun r => Eq ScBit r scLow)
+    (fun r => scBitDecEq r scLow) oneN zero (scLeRefl oneN) terminalOutside
+""", None),
+    ("exception-missing-cap", """
+def scSumOverExceptionalBoundAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (weight : A -> Nat) ->
+    (cap : Nat) -> (b : Nat) ->
+    ((x : A) -> (P x -> ScEmpty) -> ScLe (weight x) b) -> (xs : List A) ->
+    ScLe (scSumOver A weight xs)
+      (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b)) :=
+  scSumOverExceptionalBound
+""", "mismatch"),
+    ("exception-missing-outside", """
+def scSumOverExceptionalBoundAt : (0 A : Type 0) -> (0 P : A -> Type 0) ->
+    (decide : (x : A) -> ScDec (P x)) -> (weight : A -> Nat) ->
+    (cap : Nat) -> (b : Nat) -> ((x : A) -> ScLe (weight x) cap) ->
+     (xs : List A) ->
+    ScLe (scSumOver A weight xs)
+      (scAdd (scMul (scCount A P decide xs) cap) (scMul (scLength A xs) b)) :=
+  scSumOverExceptionalBound
+""", "mismatch"),
+    ("round-missing-exception-count", """
+def scAcceptingRoundBoundAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) -> (0 P : F -> Type 0) ->
+    (decide : (r : F) -> ScDec (P r)) -> (d : Nat) -> (b : Nat) ->
+
+    ((r : F) -> (P r -> ScEmpty) ->
+      ScLe (scAcceptingCount F finite plus lo hi n (next r)
+        (scRestrict F g r) (message r)) b) ->
+    ScLe (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scAdd (scMul d (scPow (scCardinality F finite) n))
+        (scMul (scCardinality F finite) b)) :=
+  scAcceptingRoundBound
+""", "mismatch"),
+    ("round-missing-continuation-bound", """
+def scAcceptingRoundBoundAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (lo : F) -> (hi : F) -> (n : Nat) ->
+    (message : F -> F) -> (next : F -> ScStrategy F n) ->
+    (g : List F -> F) -> (claim : F) -> (0 P : F -> Type 0) ->
+    (decide : (r : F) -> ScDec (P r)) -> (d : Nat) -> (b : Nat) ->
+    ScLe (scFiniteCount F P decide finite) d ->
+    ScLe (scAcceptingCount F finite plus lo hi (succ n)
+      (pair (F -> F) (F -> ScStrategy F n) message next) g claim)
+      (scAdd (scMul d (scPow (scCardinality F finite) n))
+        (scMul (scCardinality F finite) b)) :=
+  scAcceptingRoundBound
+""", "mismatch"),
+
     ("enumeration-independent", ENUMERATION_CHECKS, None),
     ("enumeration-independent-examples", ENUMERATION_EXAMPLE, None),
     ("diagonal-missing-uniqueness", """
