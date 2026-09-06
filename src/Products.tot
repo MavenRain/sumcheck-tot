@@ -1,0 +1,131 @@
+-- List products and challenge words, with exact cardinalities.
+-- These are enumerations with multiplicity; uniqueness is a separate obligation.
+def scCong : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (0 x : A) -> (0 y : A) -> Eq A x y -> Eq B (f x) (f y) :=
+  fun A B f x y h => scTransport A x y (fun z => Eq B (f x) (f z))
+    h (refl B (f x))
+
+def scEqTrans : (0 A : Type 0) -> (0 x : A) -> (0 y : A) -> (0 z : A) ->
+    Eq A x y -> Eq A y z -> Eq A x z :=
+  fun A x y z h k => scTransport A y z (fun w => Eq A x w) k h
+
+reducible def rec scMul : Nat -> Nat -> Nat := fun n m => match n with
+  | zero => zero | succ k => scAdd m (scMul k m) end
+
+reducible def rec scPow : Nat -> Nat -> Nat := fun base n => match n with
+  | zero => succ zero | succ k => scMul base (scPow base k) end
+
+reducible def rec scAppend : (0 A : Type 0) -> List A -> List A -> List A :=
+  fun A xs ys => match xs with
+  | nil => ys | cons x rest => cons A x (scAppend A rest ys) end
+
+reducible def rec scMap : (0 A : Type 0) -> (0 B : Type 0) ->
+    (A -> B) -> List A -> List B :=
+  fun A B f xs => match xs with
+  | nil => nil B | cons x rest => cons B (f x) (scMap A B f rest) end
+
+reducible def rec scExpand : (0 A : Type 0) -> (0 B : Type 0) ->
+    (A -> List B) -> List A -> List B :=
+  fun A B block xs => match xs with
+  | nil => nil B
+  | cons x rest => scAppend B (block x) (scExpand A B block rest)
+  end
+
+def rec scAppendLength : (0 A : Type 0) -> (xs : List A) -> (ys : List A) ->
+    Eq Nat (scLength A (scAppend A xs ys))
+      (scAdd (scLength A xs) (scLength A ys)) :=
+  fun A xs ys => match xs as zs return
+      Eq Nat (scLength A (scAppend A zs ys))
+        (scAdd (scLength A zs) (scLength A ys)) with
+  | nil => refl Nat (scLength A ys)
+  | cons x rest => scSuccCong (scLength A (scAppend A rest ys))
+      (scAdd (scLength A rest) (scLength A ys)) (scAppendLength A rest ys)
+  end
+
+def rec scMapLength : (0 A : Type 0) -> (0 B : Type 0) -> (f : A -> B) ->
+    (xs : List A) -> Eq Nat (scLength B (scMap A B f xs)) (scLength A xs) :=
+  fun A B f xs => match xs as ys return
+      Eq Nat (scLength B (scMap A B f ys)) (scLength A ys) with
+  | nil => refl Nat zero
+  | cons x rest => scSuccCong (scLength B (scMap A B f rest))
+      (scLength A rest) (scMapLength A B f rest)
+  end
+
+-- Every block has size m, so concatenating n blocks has size n*m.
+def rec scExpandLength : (0 A : Type 0) -> (0 B : Type 0) ->
+    (block : A -> List B) -> (m : Nat) ->
+    ((x : A) -> Eq Nat (scLength B (block x)) m) -> (xs : List A) ->
+    Eq Nat (scLength B (scExpand A B block xs)) (scMul (scLength A xs) m) :=
+  fun A B block m sized xs => match xs as ys return
+      Eq Nat (scLength B (scExpand A B block ys)) (scMul (scLength A ys) m) with
+  | nil => refl Nat zero
+  | cons x rest => scEqTrans Nat
+      (scLength B (scAppend B (block x) (scExpand A B block rest)))
+      (scAdd (scLength B (block x)) (scLength B (scExpand A B block rest)))
+      (scAdd m (scMul (scLength A rest) m))
+      (scAppendLength B (block x) (scExpand A B block rest))
+      (scEqTrans Nat
+        (scAdd (scLength B (block x)) (scLength B (scExpand A B block rest)))
+        (scAdd m (scLength B (scExpand A B block rest)))
+        (scAdd m (scMul (scLength A rest) m))
+        (scCong Nat Nat (fun k => scAdd k (scLength B (scExpand A B block rest)))
+          (scLength B (block x)) m (sized x))
+        (scCong Nat Nat (fun k => scAdd m k)
+          (scLength B (scExpand A B block rest)) (scMul (scLength A rest) m)
+          (scExpandLength A B block m sized rest)))
+  end
+
+reducible def scProduct : (0 A : Type 0) -> (0 B : Type 0) ->
+    List A -> List B -> List (Pair A B) :=
+  fun A B xs ys => scExpand A (Pair A B)
+    (fun x => scMap B (Pair A B) (fun y => pair A B x y) ys) xs
+
+def scProductLength : (0 A : Type 0) -> (0 B : Type 0) ->
+    (xs : List A) -> (ys : List B) ->
+    Eq Nat (scLength (Pair A B) (scProduct A B xs ys))
+      (scMul (scLength A xs) (scLength B ys)) :=
+  fun A B xs ys => scExpandLength A (Pair A B)
+    (fun x => scMap B (Pair A B) (fun y => pair A B x y) ys)
+    (scLength B ys) (fun x => scMapLength B (Pair A B) (fun y => pair A B x y) ys) xs
+
+-- Zero rounds has one word, including over the empty carrier.
+reducible def rec scWords : (0 A : Type 0) -> List A -> Nat -> List (List A) :=
+  fun A alphabet n => match n with
+  | zero => cons (List A) (nil A) (nil (List A))
+  | succ k => scExpand A (List A)
+      (fun x => scMap (List A) (List A) (fun word => cons A x word)
+        (scWords A alphabet k)) alphabet
+  end
+
+def rec scWordsLength : (0 A : Type 0) -> (alphabet : List A) -> (n : Nat) ->
+    Eq Nat (scLength (List A) (scWords A alphabet n))
+      (scPow (scLength A alphabet) n) :=
+  fun A alphabet n => match n as k return
+      Eq Nat (scLength (List A) (scWords A alphabet k))
+        (scPow (scLength A alphabet) k) with
+  | zero => refl Nat (succ zero)
+  | succ k => scExpandLength A (List A)
+      (fun x => scMap (List A) (List A) (fun word => cons A x word)
+        (scWords A alphabet k))
+      (scPow (scLength A alphabet) k)
+      (fun x => scEqTrans Nat
+        (scLength (List A) (scMap (List A) (List A) (fun word => cons A x word)
+          (scWords A alphabet k)))
+        (scLength (List A) (scWords A alphabet k)) (scPow (scLength A alphabet) k)
+        (scMapLength (List A) (List A) (fun word => cons A x word)
+          (scWords A alphabet k)) (scWordsLength A alphabet k)) alphabet
+  end
+
+def scWordCountBound : (0 A : Type 0) -> (0 P : List A -> Type 0) ->
+    (decide : (word : List A) -> ScDec (P word)) ->
+    (alphabet : List A) -> (n : Nat) ->
+    ScLe (scCount (List A) P decide (scWords A alphabet n))
+      (scPow (scLength A alphabet) n) :=
+  fun A P decide alphabet n => scTransport Nat
+    (scLength (List A) (scWords A alphabet n)) (scPow (scLength A alphabet) n)
+    (fun size => ScLe (scCount (List A) P decide (scWords A alphabet n)) size)
+    (scWordsLength A alphabet n) (scCountBound (List A) P decide (scWords A alphabet n))
+
+check scProductLength
+check scWordsLength
+check scWordCountBound

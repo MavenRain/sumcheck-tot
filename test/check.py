@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TOT = ROOT.parent / "tot" / "_build" / "default" / "bin" / "tot.exe"
 TOT = Path(os.environ.get("TOT", DEFAULT_TOT))
 BASE = "\n".join((ROOT / "src" / name).read_text() for name in
-                 ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot"))
+                 ("Foundation.tot", "Completeness.tot", "Finite.tot", "Counting.tot",
+                  "Products.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -26,7 +27,65 @@ reducible def honestN : ScTrace Nat :=
 # None: the checker must accept. A string: the checker must exit with
 # status 1 and print that string in its diagnostic.
 CASES = [
-    ("generic-completeness", "", None),
+    ("generic-proofs", "", None),
+    ("products-and-words", EXAMPLE + """
+def bitProductSize : Eq Nat
+    (scLength (Pair ScBit ScBit) (scProduct ScBit ScBit scBits scBits)) fourN :=
+  scProductLength ScBit ScBit scBits scBits
+def emptyLeftProduct : Eq Nat
+    (scLength (Pair ScBit ScBit) (scProduct ScBit ScBit (nil ScBit) scBits)) zero :=
+  scProductLength ScBit ScBit (nil ScBit) scBits
+def emptyRightProduct : Eq Nat
+    (scLength (Pair ScBit ScBit) (scProduct ScBit ScBit scBits (nil ScBit))) zero :=
+  scProductLength ScBit ScBit scBits (nil ScBit)
+def productContents : Eq (List (Pair ScBit ScBit))
+    (scProduct ScBit ScBit scBits (cons ScBit scHigh (nil ScBit)))
+    (cons (Pair ScBit ScBit) (pair ScBit ScBit scLow scHigh)
+      (cons (Pair ScBit ScBit) (pair ScBit ScBit scHigh scHigh)
+        (nil (Pair ScBit ScBit)))) :=
+  refl (List (Pair ScBit ScBit))
+    (cons (Pair ScBit ScBit) (pair ScBit ScBit scLow scHigh)
+      (cons (Pair ScBit ScBit) (pair ScBit ScBit scHigh scHigh)
+        (nil (Pair ScBit ScBit))))
+reducible def bitWord : ScBit -> ScBit -> List ScBit :=
+  fun x y => cons ScBit x (cons ScBit y (nil ScBit))
+reducible def expectedWords : List (List ScBit) :=
+  cons (List ScBit) (bitWord scLow scLow)
+    (cons (List ScBit) (bitWord scLow scHigh)
+      (cons (List ScBit) (bitWord scHigh scLow)
+        (cons (List ScBit) (bitWord scHigh scHigh) (nil (List ScBit)))))
+def wordContents : Eq (List (List ScBit)) (scWords ScBit scBits twoN) expectedWords :=
+  refl (List (List ScBit)) expectedWords
+def bitWordSize : Eq Nat (scLength (List ScBit) (scWords ScBit scBits twoN)) fourN :=
+  scWordsLength ScBit scBits twoN
+def zeroRoundEmptyAlphabet : Eq Nat
+    (scLength (List ScEmpty) (scWords ScEmpty (nil ScEmpty) zero)) oneN :=
+  scWordsLength ScEmpty (nil ScEmpty) zero
+def positiveRoundsEmptyAlphabet : Eq Nat
+    (scLength (List ScEmpty) (scWords ScEmpty (nil ScEmpty) twoN)) zero :=
+  scWordsLength ScEmpty (nil ScEmpty) twoN
+def allWordCount : Eq Nat
+    (scCount (List ScBit) (fun word => ScUnit) (fun word => scYes ScUnit scUnit)
+      (scWords ScBit scBits twoN)) fourN := refl Nat fourN
+def wordCountBound : ScLe
+    (scCount (List ScBit) (fun word => ScUnit) (fun word => scYes ScUnit scUnit)
+      (scWords ScBit scBits twoN)) (scPow (scCardinality ScBit scBitFinite) twoN) :=
+  scWordCountBound ScBit (fun word => ScUnit) (fun word => scYes ScUnit scUnit)
+    (scElements ScBit scBitFinite) twoN
+""", None),
+    ("wrong-product-size", EXAMPLE + """
+def wrongProductSize : Eq Nat
+    (scLength (Pair ScBit ScBit) (scProduct ScBit ScBit scBits scBits)) twoN :=
+  refl Nat twoN
+""", "mismatch"),
+    ("wrong-word-size", EXAMPLE + """
+def wrongWordSize : Eq Nat (scLength (List ScBit) (scWords ScBit scBits twoN)) twoN :=
+  refl Nat twoN
+""", "mismatch"),
+    ("wrong-zero-round-size", """
+def wrongZeroRoundSize : Eq Nat
+    (scLength (List ScEmpty) (scWords ScEmpty (nil ScEmpty) zero)) zero := refl Nat zero
+""", "mismatch"),
     ("finite-counts", """
 reducible def emptyFinite : ScFinite ScEmpty :=
   scFinite ScEmpty (nil ScEmpty)
