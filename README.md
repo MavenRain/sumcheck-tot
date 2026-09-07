@@ -40,8 +40,10 @@ false zero-round claims accept none, and a valid first-round check splits
 the count into a sum over adaptive continuations. A failed first-round check
 gives count zero.
 Under an explicit agreement-count hypothesis throughout the strategy tree,
-false claims now satisfy `|F| * acceptingCount <= n * d * |F|^n`. Discharging
-that hypothesis from polynomial degree and root bounds remains future work.
+false claims satisfy `|F| * acceptingCount <= n * d * |F|^n`.
+Coefficient strategies and certified targets discharge that hypothesis
+from a global coefficient agreement bound. Proving the global bound
+from field laws and a root bound remains future work.
 
 ## Check
 
@@ -230,10 +232,12 @@ and conditional counting soundness under an agreement-tree hypothesis.
 strategies supply this evidence by construction. The degree component is
 evidence that accompanies the transcript. The verifier does not decide it:
 `scPolynomialStrategyAcceptDec` answers with `scYes` and a constructed proof.
-Every counting and soundness result in `RoundBounds.tot` and
-`ConditionalSoundness.tot` still states its bound for the degree-free
-`scAccept`. `scPolynomialAcceptingCountErase` proves that the stronger
-relation accepts exactly the same vectors for coefficient strategies.
+The results in `RoundBounds.tot` and `ConditionalSoundness.tot` state their
+bounds for the degree-free `scAccept`. `scPolynomialAcceptingCountErase`
+proves that the stronger relation accepts exactly the same vectors for
+coefficient strategies. `PolynomialSoundness.tot` uses this equality to
+bound polynomial acceptance directly under a global coefficient agreement
+hypothesis and a certified target.
 The field root bound and a probability interpretation remain open. Adaptive
 strategies enforce the round count through their index and the challenge
 vector index; bare `ScTrace` values and `scAccept` carry no external
@@ -249,15 +253,23 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all 123 checks passed with checker SHA-256
+On 2026-09-06, all 134 checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The 123 checks:
+The 134 checks:
 
 - All generic proofs check without a prelude or axioms.
+- Conditional polynomial soundness: the agreement interface and five
+  theorem statements check at abstract arguments. A proved degree-one bit
+  agreement bound supplies the premise for both soundness bounds. The
+  exact false-claim counts of one and three at one and two rounds, plus
+  count zero at zero rounds, compute without that premise. Both soundness
+  bounds check at all three depths. Nine rejection controls cover missing
+  agreement, target, marginal witness, round validity, local or initial
+  falsity, coefficient inequality, and an incorrect adaptive count.
 - Honest coefficient strategies: four abstract statements, computed linear
   marginals and challenge-dependent children, acceptance at two and zero
   rounds, and full finite acceptance counts. Four rejection controls cover
@@ -409,10 +421,10 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check 124 deliberate mutations in memory. All were caught.
+suite and check 133 deliberate mutations in memory. All were caught.
 Four mutations weaken conditional soundness or corrupt a continuation's claim
-or target. Generic proofs catch the budget theorem and both tree mutations;
-the abstract soundness check catches the scaled theorem weakening.
+or target. Generic proofs catch all four through the polynomial soundness
+bridge and the original consumers.
 Six mutations trivialize the sum and round bounds. Generic proofs catch all
 six now that conditional soundness consumes the accepting-round theorem.
 Eleven mutations replace the enumeration-independence and supporting sum
@@ -547,8 +559,8 @@ This theorem permits any decidable exceptional predicate. It does not prove
 that agreement with the honest marginal is rare, or that false continuation
 claims satisfy the induction hypothesis. Substituting `scErrorBudget q d n`
 for `b` gives the successor budget. The conditional soundness theorem below
-now composes this step throughout a strategy tree. Polynomial degree
-constraints and a root bound are still absent, so this is a conditional
+composes this step throughout a strategy tree. This layer requires no
+polynomial degree constraints and proves no root bound; it is a conditional
 counting result.
 
 ## Conditional soundness
@@ -569,9 +581,10 @@ needed by the induction hypothesis. Invalid round checks accept zero vectors.
 
 `scConditionalSoundnessScaled` derives
 `|F| * acceptingCount <= n * d * |F|^n`. This natural-number statement needs
-no division or positivity assumptions. It remains conditional: polynomial
-messages, degree preservation, and a root bound must still discharge the
-agreement-tree hypothesis. A probability interpretation is not yet formalized.
+no division or positivity assumptions. The polynomial bridge below constructs
+the agreement tree from coefficient strategies, certified targets, and a
+global polynomial agreement bound. Proving that global bound from field laws
+and formalizing a probability interpretation remain open.
 
 ## Bounded-degree polynomials
 
@@ -673,8 +686,9 @@ stronger relation. `scPolynomialAcceptingCountErase` proves exact equality
 with `scAcceptingCount` of the erased strategy: the forward implication
 projects algebraic acceptance, and the reverse adds the degree theorem.
 Existing counting results apply to coefficient strategies through this
-equality. Soundness still needs the agreement-tree hypothesis until the
-root bound and its application to polynomial messages are proved.
+equality. The polynomial soundness bridge below constructs the agreement
+tree from a global coefficient agreement bound and a certified target.
+Proving that global bound from field laws remains open.
 
 Validation includes the natural-number honest example and a two-round bit
 strategy whose second polynomial depends on the first challenge. All four
@@ -688,10 +702,11 @@ Six abstract statements pin the public theorems and decision procedure;
 five rejection controls cover missing evidence, wrong degree, early stopping,
 and missing target certificates. Nine mutations trivialize the six public
 statements, remove either acceptance obligation, or select the wrong child
-when erasing a strategy. Six are caught by generic proofs; the degree
-projection, honest completeness, and count-erasure statement mutations are
-caught by the abstract statement check. No root bound or unconditional
-soundness is claimed.
+when erasing a strategy. Seven are caught by generic proofs; the degree
+projection and honest completeness mutations are caught by the abstract
+statement check. The polynomial soundness bridge consumes count erasure;
+its mutation pins the resulting non-function diagnostic. No root bound or
+unconditional soundness is claimed.
 
 ## Honest coefficient strategies
 
@@ -733,6 +748,53 @@ This completes the honest coefficient-strategy constructor milestone.
 Multivariate coefficient tensors, field structure, a root bound, and
 unconditional soundness remain open.
 
+## Conditional polynomial soundness
+
+`src/PolynomialSoundness.tot` connects coefficient strategies and certified
+targets to the adaptive counting proof. `ScPolynomialAgreementBound` is an
+explicit hypothesis: two unequal degree-at-most-`d` coefficient vectors
+agree in evaluation at no more than `d` elements of the finite carrier.
+The inequality concerns coefficients, so it requires no equality between
+functions or decidable coefficient equality. A field root bound has not
+been proved or assumed as an axiom.
+
+`scPolynomialRoundDistinct` proves that a valid round sum and a false claim
+force the message coefficients to differ from a witnessed honest marginal.
+Equal coefficients would give equal endpoint sums and contradict the false
+claim. `scPolynomialRoundAgreement` then transfers the coefficient agreement
+count to the marginal using pointwise witness equalities. These helpers
+need no algebraic laws beyond the supplied marginal witness.
+
+`scPolynomialAgreementTree` constructs the recursive agreement evidence
+for any coefficient strategy and certified target. Distribution and the
+additive interchange law supply the marginal witnesses. Every challenge
+selects the corresponding strategy child, restricts the target, and sets
+the next claim to the message evaluation. The tree can be constructed at
+true claims too; each local bound is conditional on validity and falsity.
+
+`scPolynomialConditionalSoundness` bounds the polynomial accepting count
+for a false initial claim by `scErrorBudget |F| d n`.
+`scPolynomialConditionalSoundnessScaled` gives
+`|F| * polynomialAcceptingCount <= n * d * |F|^n`.
+Both require the global coefficient agreement hypothesis and the target
+certificate. Neither requires a nonempty carrier, positive degree, or
+positive round count. A probability interpretation remains open.
+
+The bit example proves the degree-one agreement hypothesis by exhausting
+the sixteen pairs of affine polynomials under exclusive or and conjunction.
+It uses a certified zero target and the cheating message `1 + x` at false
+claim one. One round accepts one of two challenges. An adaptive two-round
+strategy chooses `1 + x` after zero and the zero polynomial after one,
+accepting three of four vectors. Zero rounds accept none. The exact counts
+compute independently of the bounds, and both bound theorems check at each
+depth. The bit operations have the required proved laws; this does not
+establish a general field root bound.
+
+Nine source mutations weaken the agreement bound to carrier cardinality,
+trivialize the five theorems, or corrupt the recursive child strategy, claim,
+or restricted target. Generic proofs catch seven; the abstract statement
+check catches the two final soundness theorem weakenings.
+
 ## Next milestones
 
 1. Finite enumeration independence is proved. Predicate monotonicity,
@@ -756,8 +818,10 @@ unconditional soundness remain open.
 4. Adaptive strategies, enforced round counts, decidable acceptance, and the
    exact first-round count decomposition are proved. The false-claim bound
    `|F| * acceptingCount <= n * d * |F|^n` is proved under `ScAgreementTree`.
-   Apply the root bound to coefficient strategies and certified targets to
-   discharge the agreement-tree hypothesis.
+   Coefficient strategies and certified targets construct `ScAgreementTree`
+   under a global coefficient agreement bound, giving the same bound for
+   polynomial acceptance. Prove the field root and agreement bounds to
+   discharge this remaining hypothesis.
 5. Interpret that count under independent uniform challenges to obtain
    soundness error at most `n*d/|F|`. If intermediate results take a root
    bound as a hypothesis, label them conditional until it is discharged.
@@ -770,7 +834,7 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
 `src/RoundBounds.tot`, `src/ConditionalSoundness.tot`, `src/Polynomials.tot`,
 `src/PolynomialTargets.tot`, `src/PolynomialAcceptance.tot`,
-`src/HonestCoefficients.tot`.
+`src/HonestCoefficients.tot`, `src/PolynomialSoundness.tot`.
 
 ## License
 

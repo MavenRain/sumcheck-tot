@@ -16,7 +16,7 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
                   "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot",
                   "Polynomials.tot", "PolynomialTargets.tot", "PolynomialAcceptance.tot",
-                  "HonestCoefficients.tot"))
+                  "HonestCoefficients.tot", "PolynomialSoundness.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -1238,7 +1238,7 @@ def generatedZeroAccepted : ScPolynomialStrategyAccept Nat scAdd scMul
   scHonestCoefficientCompleteness Nat scAdd scMul targetDistribute targetShuffle
     zero oneN oneN zero linearGoal scUnit scUnit
 """
-HONEST_COEFFICIENT_BITS = EXAMPLE + """
+BIT_OPERATIONS = EXAMPLE + """
 reducible def honestBitPlus : ScBit -> ScBit -> ScBit := fun a b => match a with
 | scLow => b | scHigh => match b with | scLow => scHigh | scHigh => scLow end end
 reducible def honestBitTimes : ScBit -> ScBit -> ScBit := fun a b => match a with
@@ -1300,6 +1300,8 @@ def honestBitShuffle : (a : ScBit) -> (b : ScBit) -> (c : ScBit) -> (e : ScBit) 
       end
     end
   end
+"""
+HONEST_COEFFICIENT_BITS = BIT_OPERATIONS + """
 reducible def honestBitGoal : List ScBit -> ScBit := fun xs => scHigh
 reducible def rec honestBitTarget : (n : Nat) ->
     ScPolynomialTarget ScBit honestBitPlus honestBitTimes zero n honestBitGoal :=
@@ -1338,8 +1340,348 @@ def generatedBitZeroCount : Eq Nat
 def honestBitTimesOther : Eq ScBit (honestBitTimes scLow scHigh) scLow := refl ScBit scLow
 """
 
+POLYNOMIAL_SOUNDNESS_STATEMENTS = """
+def polynomialAgreementAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    (p : ScPolynomial F d) -> (q : ScPolynomial F d) ->
+    (Eq (ScPolynomial F d) p q -> ScEmpty) ->
+    ScLe (scFiniteCount F
+      (fun r => Eq F (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d q r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d q r)) finite) d :=
+  fun F finite plus times d agreement => agreement
+def polynomialRoundDistinctAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (p : ScPolynomial F d) -> (g : List F -> F) -> (claim : F) ->
+    (w : ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g)) ->
+    Eq F (plus (scPolynomialEval F plus times d p lo)
+      (scPolynomialEval F plus times d p hi)) claim ->
+    (Eq F claim (scSum F plus lo hi (succ n) g) -> ScEmpty) ->
+    Eq (ScPolynomial F d) p
+      (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) -> ScEmpty :=
+  scPolynomialRoundDistinct
+def polynomialRoundAgreementAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (p : ScPolynomial F d) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g) ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    Eq F (plus (scPolynomialEval F plus times d p lo)
+      (scPolynomialEval F plus times d p hi)) claim ->
+    (Eq F claim (scSum F plus lo hi (succ n) g) -> ScEmpty) ->
+    ScLe (scFiniteCount F
+      (fun r => Eq F (scPolynomialEval F plus times d p r)
+        (scMarginal F plus lo hi n g r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scMarginal F plus lo hi n g r)) finite) d := scPolynomialRoundAgreement
+def polynomialAgreementTreeAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialTarget F plus times d n g ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    ScAgreementTree F finite plus lo hi d n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim :=
+  scPolynomialAgreementTree
+def polynomialSoundnessAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialTarget F plus times d n g ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n) := scPolynomialConditionalSoundness
+def polynomialSoundnessScaledAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialTarget F plus times d n g ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scMul (scCardinality F finite)
+      (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim))
+      (scMul (scMul n d) (scPow (scCardinality F finite) n)) :=
+  scPolynomialConditionalSoundnessScaled
+"""
+
+POLYNOMIAL_SOUNDNESS_EXAMPLE = BIT_OPERATIONS + """
+
+-- The four affine bit polynomials satisfy the agreement bound by cases.
+reducible def soundBitLinear : ScBit -> ScBit -> ScPolynomial ScBit oneN :=
+  fun a b => pair ScBit (ScPolynomial ScBit zero) a (pair ScBit ScUnit b scUnit)
+reducible def soundBitAgreement : ScPolynomial ScBit oneN ->
+    ScPolynomial ScBit oneN -> Type 0 :=
+  fun p q => (Eq (ScPolynomial ScBit oneN) p q -> ScEmpty) ->
+    ScLe (scFiniteCount ScBit
+      (fun r => Eq ScBit
+        (scPolynomialEval ScBit honestBitPlus honestBitTimes oneN p r)
+        (scPolynomialEval ScBit honestBitPlus honestBitTimes oneN q r))
+      (fun r => scDecEq ScBit scBitFinite
+        (scPolynomialEval ScBit honestBitPlus honestBitTimes oneN p r)
+        (scPolynomialEval ScBit honestBitPlus honestBitTimes oneN q r))
+      scBitFinite) oneN
+
+def soundBitLinearAgreement : (a : ScBit) -> (b : ScBit) ->
+    (c : ScBit) -> (e : ScBit) ->
+    soundBitAgreement (soundBitLinear a b) (soundBitLinear c e) :=
+  fun a b c e =>
+  match a as x0 return soundBitAgreement (soundBitLinear x0 b) (soundBitLinear c e) with
+  | scLow => match b as x1 return
+      soundBitAgreement (soundBitLinear scLow x1) (soundBitLinear c e) with
+    | scLow => match c as x2 return
+        soundBitAgreement (soundBitLinear scLow scLow) (soundBitLinear x2 e) with
+      | scLow => match e as x3 return
+          soundBitAgreement (soundBitLinear scLow scLow) (soundBitLinear scLow x3) with
+        | scLow => fun different => match different
+            (refl (ScPolynomial ScBit oneN) (soundBitLinear scLow scLow)) with end
+        | scHigh => fun different => scLeRefl oneN
+        end
+      | scHigh => match e as x3 return
+          soundBitAgreement (soundBitLinear scLow scLow) (soundBitLinear scHigh x3) with
+        | scLow => fun different => scLeZero oneN
+        | scHigh => fun different => scLeRefl oneN
+        end
+      end
+    | scHigh => match c as x2 return
+        soundBitAgreement (soundBitLinear scLow scHigh) (soundBitLinear x2 e) with
+      | scLow => match e as x3 return
+          soundBitAgreement (soundBitLinear scLow scHigh) (soundBitLinear scLow x3) with
+        | scLow => fun different => scLeRefl oneN
+        | scHigh => fun different => match different
+            (refl (ScPolynomial ScBit oneN) (soundBitLinear scLow scHigh)) with end
+        end
+      | scHigh => match e as x3 return
+          soundBitAgreement (soundBitLinear scLow scHigh) (soundBitLinear scHigh x3) with
+        | scLow => fun different => scLeRefl oneN
+        | scHigh => fun different => scLeZero oneN
+        end
+      end
+    end
+  | scHigh => match b as x1 return
+      soundBitAgreement (soundBitLinear scHigh x1) (soundBitLinear c e) with
+    | scLow => match c as x2 return
+        soundBitAgreement (soundBitLinear scHigh scLow) (soundBitLinear x2 e) with
+      | scLow => match e as x3 return
+          soundBitAgreement (soundBitLinear scHigh scLow) (soundBitLinear scLow x3) with
+        | scLow => fun different => scLeZero oneN
+        | scHigh => fun different => scLeRefl oneN
+        end
+      | scHigh => match e as x3 return
+          soundBitAgreement (soundBitLinear scHigh scLow) (soundBitLinear scHigh x3) with
+        | scLow => fun different => match different
+            (refl (ScPolynomial ScBit oneN) (soundBitLinear scHigh scLow)) with end
+        | scHigh => fun different => scLeRefl oneN
+        end
+      end
+    | scHigh => match c as x2 return
+        soundBitAgreement (soundBitLinear scHigh scHigh) (soundBitLinear x2 e) with
+      | scLow => match e as x3 return
+          soundBitAgreement (soundBitLinear scHigh scHigh) (soundBitLinear scLow x3) with
+        | scLow => fun different => scLeRefl oneN
+        | scHigh => fun different => scLeZero oneN
+        end
+      | scHigh => match e as x3 return
+          soundBitAgreement (soundBitLinear scHigh scHigh) (soundBitLinear scHigh x3) with
+        | scLow => fun different => scLeRefl oneN
+        | scHigh => fun different => match different
+            (refl (ScPolynomial ScBit oneN) (soundBitLinear scHigh scHigh)) with end
+        end
+      end
+    end
+  end
+
+def soundBitAgreementBound : (p : ScPolynomial ScBit oneN) ->
+    (q : ScPolynomial ScBit oneN) -> soundBitAgreement p q :=
+  fun p => match p as s return (q : ScPolynomial ScBit oneN) ->
+      soundBitAgreement s q with
+  | pair a tail => match tail as rest return (q : ScPolynomial ScBit oneN) ->
+      soundBitAgreement (pair ScBit (ScPolynomial ScBit zero) a rest) q with
+    | pair b terminal => match terminal as u return (q : ScPolynomial ScBit oneN) ->
+        soundBitAgreement
+          (pair ScBit (ScPolynomial ScBit zero) a (pair ScBit ScUnit b u)) q with
+      | scUnit => fun q => match q as t return
+          soundBitAgreement (soundBitLinear a b) t with
+        | pair c tail => match tail as rest return
+            soundBitAgreement (soundBitLinear a b)
+              (pair ScBit (ScPolynomial ScBit zero) c rest) with
+          | pair e terminal => match terminal as u return
+              soundBitAgreement (soundBitLinear a b)
+                (pair ScBit (ScPolynomial ScBit zero) c (pair ScBit ScUnit e u)) with
+            | scUnit => soundBitLinearAgreement a b c e
+            end
+          end
+        end
+      end
+    end
+  end
+
+-- Leading zero coefficients provide the constant target at degree one.
+reducible def soundBitGoal : List ScBit -> ScBit := fun xs => scLow
+def soundBitZeroEval : (x : ScBit) ->
+    Eq ScBit (scPolynomialEval ScBit honestBitPlus honestBitTimes oneN
+      (soundBitLinear scLow scLow) x) scLow :=
+  fun x => match x as r return
+      Eq ScBit (scPolynomialEval ScBit honestBitPlus honestBitTimes oneN
+        (soundBitLinear scLow scLow) r) scLow with
+  | scLow => refl ScBit scLow
+  | scHigh => refl ScBit scLow
+  end
+reducible def rec soundBitTarget : (n : Nat) ->
+    ScPolynomialTarget ScBit honestBitPlus honestBitTimes oneN n soundBitGoal :=
+  fun n => match n as k return
+      ScPolynomialTarget ScBit honestBitPlus honestBitTimes oneN k soundBitGoal with
+  | zero => scUnit
+  | succ k => pair
+      ((xs : List ScBit) -> ScPolynomialWitness ScBit honestBitPlus honestBitTimes
+        oneN (fun x => scLow))
+      ((r : ScBit) -> ScPolynomialTarget ScBit honestBitPlus honestBitTimes
+        oneN k soundBitGoal)
+      (fun xs => scPolynomialWitness ScBit honestBitPlus honestBitTimes oneN
+        (fun x => scLow) (soundBitLinear scLow scLow) soundBitZeroEval)
+      (fun r => soundBitTarget k)
+  end
+reducible def soundBitLast : ScPolynomialStrategy ScBit oneN oneN :=
+  pair (ScPolynomial ScBit oneN) (ScBit -> ScPolynomialStrategy ScBit oneN zero)
+    (soundBitLinear scHigh scHigh) (fun r => scUnit)
+reducible def soundBitHonestLast : ScPolynomialStrategy ScBit oneN oneN :=
+  pair (ScPolynomial ScBit oneN) (ScBit -> ScPolynomialStrategy ScBit oneN zero)
+    (soundBitLinear scLow scLow) (fun r => scUnit)
+reducible def soundBitAdaptive : ScPolynomialStrategy ScBit oneN twoN :=
+  pair (ScPolynomial ScBit oneN) (ScBit -> ScPolynomialStrategy ScBit oneN oneN)
+    (soundBitLinear scHigh scHigh)
+    (fun r => match r with
+    | scLow => soundBitLast
+    | scHigh => soundBitHonestLast
+    end)
+def soundBitOneCount : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh) oneN :=
+  refl Nat oneN
+def soundBitTwoCount : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN twoN soundBitAdaptive soundBitGoal scHigh) (succ twoN) :=
+  refl Nat (succ twoN)
+def soundBitZeroCount : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN zero scUnit soundBitGoal scHigh) zero := refl Nat zero
+
+def soundBitPolynomialAgreement : ScPolynomialAgreementBound ScBit scBitFinite
+    honestBitPlus honestBitTimes oneN := soundBitAgreementBound
+def soundBitTree : ScAgreementTree ScBit scBitFinite honestBitPlus scLow scHigh
+    oneN twoN
+    (scPolynomialStrategyErase ScBit honestBitPlus honestBitTimes oneN twoN
+      soundBitAdaptive) soundBitGoal scHigh :=
+  scPolynomialAgreementTree ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN twoN soundBitAdaptive
+    soundBitGoal scHigh (soundBitTarget twoN) soundBitPolynomialAgreement
+def soundBitOneBound : ScLe
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh) oneN :=
+  scPolynomialConditionalSoundness ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN oneN soundBitLast
+    soundBitGoal scHigh (soundBitTarget oneN) soundBitPolynomialAgreement scHighNeLow
+def soundBitTwoBound : ScLe
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN twoN soundBitAdaptive soundBitGoal scHigh) fourN :=
+  scPolynomialConditionalSoundness ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN twoN soundBitAdaptive
+    soundBitGoal scHigh (soundBitTarget twoN) soundBitPolynomialAgreement scHighNeLow
+def soundBitZeroBound : ScLe
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN zero scUnit soundBitGoal scHigh) zero :=
+  scPolynomialConditionalSoundness ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN zero scUnit
+    soundBitGoal scHigh (soundBitTarget zero) soundBitPolynomialAgreement scHighNeLow
+def soundBitOneScaled : ScLe
+    (scMul twoN (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh)) twoN :=
+  scPolynomialConditionalSoundnessScaled ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN oneN soundBitLast
+    soundBitGoal scHigh (soundBitTarget oneN) soundBitPolynomialAgreement scHighNeLow
+def soundBitTwoScaled : ScLe
+    (scMul twoN (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN twoN soundBitAdaptive soundBitGoal scHigh)) (scMul twoN fourN) :=
+  scPolynomialConditionalSoundnessScaled ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN twoN soundBitAdaptive
+    soundBitGoal scHigh (soundBitTarget twoN) soundBitPolynomialAgreement scHighNeLow
+def soundBitZeroScaled : ScLe
+    (scMul twoN (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN zero scUnit soundBitGoal scHigh)) zero :=
+  scPolynomialConditionalSoundnessScaled ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN zero scUnit
+    soundBitGoal scHigh (soundBitTarget zero) soundBitPolynomialAgreement scHighNeLow
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("polynomial-soundness-statements", POLYNOMIAL_SOUNDNESS_STATEMENTS, None),
+    ("polynomial-soundness-examples", POLYNOMIAL_SOUNDNESS_EXAMPLE, None),
+    ("polynomial-soundness-missing-agreement", POLYNOMIAL_SOUNDNESS_EXAMPLE + """
+def bad : ScLe
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh) oneN :=
+  scPolynomialConditionalSoundness ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN oneN soundBitLast
+    soundBitGoal scHigh (soundBitTarget oneN) scUnit scHighNeLow
+""", "mismatch"),
+    ("polynomial-soundness-missing-target", POLYNOMIAL_SOUNDNESS_EXAMPLE + """
+def bad : ScLe
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh) oneN :=
+  scPolynomialConditionalSoundness ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN oneN soundBitLast
+    soundBitGoal scHigh scUnit soundBitPolynomialAgreement scHighNeLow
+""", "mismatch"),
+    ("polynomial-soundness-missing-falsity", POLYNOMIAL_SOUNDNESS_EXAMPLE + """
+def bad : ScLe
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh) oneN :=
+  scPolynomialConditionalSoundness ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN oneN soundBitLast
+    soundBitGoal scHigh (soundBitTarget oneN) soundBitPolynomialAgreement scUnit
+""", "mismatch"),
+    ("polynomial-soundness-scaled-missing-falsity", POLYNOMIAL_SOUNDNESS_EXAMPLE + """
+def bad : ScLe
+    (scMul twoN (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN oneN soundBitLast soundBitGoal scHigh)) twoN :=
+  scPolynomialConditionalSoundnessScaled ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh oneN oneN soundBitLast
+    soundBitGoal scHigh (soundBitTarget oneN) soundBitPolynomialAgreement scUnit
+""", "mismatch"),
+    ("polynomial-soundness-equal-coefficients", POLYNOMIAL_SOUNDNESS_EXAMPLE + """
+def bad : ScLe twoN oneN := soundBitPolynomialAgreement
+  (soundBitLinear scLow scLow) (soundBitLinear scLow scLow) scUnit
+""", "mismatch"),
+    ("polynomial-soundness-wrong-count", POLYNOMIAL_SOUNDNESS_EXAMPLE + """
+def bad : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh oneN twoN soundBitAdaptive soundBitGoal scHigh) oneN := refl Nat oneN
+""", "mismatch"),
+    ("polynomial-soundness-missing-marginal", POLYNOMIAL_SOUNDNESS_STATEMENTS.replace(
+        "    ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g) ->\n",
+        "", 1), "mismatch"),
+    ("polynomial-soundness-missing-round-check", POLYNOMIAL_SOUNDNESS_STATEMENTS.replace(
+        "    Eq F (plus (scPolynomialEval F plus times d p lo)\n"
+        "      (scPolynomialEval F plus times d p hi)) claim ->\n", "", 1), "mismatch"),
+    ("polynomial-soundness-missing-local-falsity", POLYNOMIAL_SOUNDNESS_STATEMENTS.replace(
+        "    (Eq F claim (scSum F plus lo hi (succ n) g) -> ScEmpty) ->\n",
+        "", 1), "mismatch"),
     ("honest-coefficient-statements", HONEST_COEFFICIENT_STATEMENTS, None),
     ("honest-coefficient-examples", HONEST_COEFFICIENT_EXAMPLE, None),
     ("honest-coefficient-counts", HONEST_COEFFICIENT_BITS, None),

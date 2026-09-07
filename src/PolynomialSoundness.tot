@@ -1,0 +1,211 @@
+-- Distinct coefficient vectors agree at at most d challenges. This is an
+-- explicit algebraic hypothesis, not a root bound proved for arbitrary carriers.
+reducible def ScPolynomialAgreementBound : (0 F : Type 0) -> ScFinite F ->
+    (F -> F -> F) -> (F -> F -> F) -> Nat -> Type 0 :=
+  fun F finite plus times d => (p : ScPolynomial F d) -> (q : ScPolynomial F d) ->
+    (Eq (ScPolynomial F d) p q -> ScEmpty) ->
+    ScLe (scFiniteCount F
+      (fun r => Eq F (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d q r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d q r)) finite) d
+
+-- A valid round with a false claim cannot use the honest witness coefficients.
+def scPolynomialRoundDistinct : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (p : ScPolynomial F d) -> (g : List F -> F) -> (claim : F) ->
+    (w : ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g)) ->
+    Eq F (plus (scPolynomialEval F plus times d p lo)
+      (scPolynomialEval F plus times d p hi)) claim ->
+    (Eq F claim (scSum F plus lo hi (succ n) g) -> ScEmpty) ->
+    Eq (ScPolynomial F d) p
+      (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) -> ScEmpty :=
+  fun F plus times lo hi d n p g claim w valid different equal => different
+    (scEqTrans F claim
+      (plus (scPolynomialEval F plus times d p lo)
+        (scPolynomialEval F plus times d p hi))
+      (scSum F plus lo hi (succ n) g)
+      (scEqSym F (plus (scPolynomialEval F plus times d p lo)
+        (scPolynomialEval F plus times d p hi)) claim valid)
+      (scTransport (ScPolynomial F d)
+        (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) p
+        (fun q => Eq F (plus (scPolynomialEval F plus times d q lo)
+          (scPolynomialEval F plus times d q hi)) (scSum F plus lo hi (succ n) g))
+        (scEqSym (ScPolynomial F d) p
+          (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) equal)
+        (scPolynomialCong2 F plus
+          (scPolynomialEval F plus times d
+            (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) lo)
+          (scMarginal F plus lo hi n g lo)
+          (scPolynomialEval F plus times d
+            (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) hi)
+          (scMarginal F plus lo hi n g hi)
+          (scWitnessEvaluation F plus times d (scMarginal F plus lo hi n g) w lo)
+          (scWitnessEvaluation F plus times d (scMarginal F plus lo hi n g) w hi))))
+
+-- Transfer coefficient agreement to the honest marginal using its witness.
+-- The witness already carries evaluation evidence, so no algebra laws enter here.
+def scPolynomialRoundAgreement : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (p : ScPolynomial F d) -> (g : List F -> F) -> (claim : F) ->
+    (w : ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g)) ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    Eq F (plus (scPolynomialEval F plus times d p lo)
+      (scPolynomialEval F plus times d p hi)) claim ->
+    (Eq F claim (scSum F plus lo hi (succ n) g) -> ScEmpty) ->
+    ScLe (scFiniteCount F
+      (fun r => Eq F (scPolynomialEval F plus times d p r) (scMarginal F plus lo hi n g r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scMarginal F plus lo hi n g r)) finite) d :=
+  fun F finite plus times lo hi d n p g claim w agreement valid different => scLeTrans
+    (scFiniteCount F
+      (fun r => Eq F (scPolynomialEval F plus times d p r) (scMarginal F plus lo hi n g r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scMarginal F plus lo hi n g r)) finite)
+    (scFiniteCount F
+      (fun r => Eq F (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) r)) finite)
+    (scCountMono F
+      (fun r => Eq F (scPolynomialEval F plus times d p r) (scMarginal F plus lo hi n g r))
+      (fun r => Eq F (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) r))
+      (fun r equal => scEqTrans F (scPolynomialEval F plus times d p r)
+        (scMarginal F plus lo hi n g r)
+        (scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) r)
+        equal (scEqSym F
+          (scPolynomialEval F plus times d
+            (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) r)
+          (scMarginal F plus lo hi n g r)
+          (scWitnessEvaluation F plus times d (scMarginal F plus lo hi n g) w r)))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scMarginal F plus lo hi n g r))
+      (fun r => scDecEq F finite (scPolynomialEval F plus times d p r)
+        (scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w) r))
+      (scElements F finite)) d
+    (agreement p (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w)
+      (scPolynomialRoundDistinct F plus times lo hi d n p g claim w valid different))
+
+-- Every adaptive coefficient strategy receives the agreement tree needed by
+-- the existing counting theorem. Target evidence is restricted at each child.
+def rec scPolynomialAgreementTree : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialTarget F plus times d n g ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    ScAgreementTree F finite plus lo hi d n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim :=
+  fun F finite plus times distribute shuffle lo hi d n => match n as k return
+      (strategy : ScPolynomialStrategy F d k) -> (g : List F -> F) -> (claim : F) ->
+      ScPolynomialTarget F plus times d k g ->
+      ScPolynomialAgreementBound F finite plus times d ->
+      ScAgreementTree F finite plus lo hi d k
+        (scPolynomialStrategyErase F plus times d k strategy) g claim with
+  | zero => fun strategy g claim target agreement => scUnit
+  | succ k => fun strategy => match strategy as s return
+      (g : List F -> F) -> (claim : F) ->
+      ScPolynomialTarget F plus times d (succ k) g ->
+      ScPolynomialAgreementBound F finite plus times d ->
+      ScAgreementTree F finite plus lo hi d (succ k)
+        (scPolynomialStrategyErase F plus times d (succ k) s) g claim with
+    | pair polynomial next => fun g claim target agreement => pair
+        (Eq F (plus (scPolynomialEval F plus times d polynomial lo)
+          (scPolynomialEval F plus times d polynomial hi)) claim ->
+          (Eq F claim (scSum F plus lo hi (succ k) g) -> ScEmpty) ->
+          ScLe (scFiniteCount F
+            (fun r => Eq F (scPolynomialEval F plus times d polynomial r)
+              (scMarginal F plus lo hi k g r))
+            (fun r => scDecEq F finite (scPolynomialEval F plus times d polynomial r)
+              (scMarginal F plus lo hi k g r)) finite) d)
+        ((r : F) -> ScAgreementTree F finite plus lo hi d k
+          (scPolynomialStrategyErase F plus times d k (next r)) (scRestrict F g r)
+          (scPolynomialEval F plus times d polynomial r))
+        (fun valid different => scPolynomialRoundAgreement F finite plus times lo hi d k
+          polynomial g claim
+          (scPolynomialMarginal F plus times distribute shuffle lo hi d k g target)
+          agreement valid different)
+        (fun r => scPolynomialAgreementTree F finite plus times distribute shuffle lo hi d k
+          (next r) (scRestrict F g r) (scPolynomialEval F plus times d polynomial r)
+          (scPolynomialTargetRestrict F plus times d k g target r) agreement)
+    end
+  end
+
+def scPolynomialConditionalSoundness : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialTarget F plus times d n g ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+      (scErrorBudget (scCardinality F finite) d n) :=
+  fun F finite plus times distribute shuffle lo hi d n strategy g claim target agreement
+      different => scTransport Nat
+    (scAcceptingCount F finite plus lo hi n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim)
+    (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+    (fun total => ScLe total (scErrorBudget (scCardinality F finite) d n))
+    (scEqSym Nat
+      (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+      (scAcceptingCount F finite plus lo hi n
+        (scPolynomialStrategyErase F plus times d n strategy) g claim)
+      (scPolynomialAcceptingCountErase F finite plus times lo hi d n strategy g claim))
+    (scConditionalSoundness F finite plus lo hi d n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim
+      (scPolynomialAgreementTree F finite plus times distribute shuffle lo hi d n
+        strategy g claim target agreement) different)
+
+-- Denominator-free soundness also covers zero rounds and empty carriers.
+def scPolynomialConditionalSoundnessScaled : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (strategy : ScPolynomialStrategy F d n) -> (g : List F -> F) -> (claim : F) ->
+    ScPolynomialTarget F plus times d n g ->
+    ScPolynomialAgreementBound F finite plus times d ->
+    (Eq F claim (scSum F plus lo hi n g) -> ScEmpty) ->
+    ScLe (scMul (scCardinality F finite)
+      (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim))
+      (scMul (scMul n d) (scPow (scCardinality F finite) n)) :=
+  fun F finite plus times distribute shuffle lo hi d n strategy g claim target agreement
+      different => scTransport Nat
+    (scAcceptingCount F finite plus lo hi n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim)
+    (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+    (fun total => ScLe (scMul (scCardinality F finite) total)
+      (scMul (scMul n d) (scPow (scCardinality F finite) n)))
+    (scEqSym Nat
+      (scPolynomialAcceptingCount F finite plus times lo hi d n strategy g claim)
+      (scAcceptingCount F finite plus lo hi n
+        (scPolynomialStrategyErase F plus times d n strategy) g claim)
+      (scPolynomialAcceptingCountErase F finite plus times lo hi d n strategy g claim))
+    (scConditionalSoundnessScaled F finite plus lo hi d n
+      (scPolynomialStrategyErase F plus times d n strategy) g claim
+      (scPolynomialAgreementTree F finite plus times distribute shuffle lo hi d n
+        strategy g claim target agreement) different)
+
+check scPolynomialRoundDistinct
+check scPolynomialRoundAgreement
+check scPolynomialAgreementTree
+check scPolynomialConditionalSoundness
+check scPolynomialConditionalSoundnessScaled
