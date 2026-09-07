@@ -249,15 +249,19 @@ excluded, including its unrelated IO-law axioms.
 
 ## Validation
 
-On 2026-09-06, all 116 checks passed with checker SHA-256
+On 2026-09-06, all 123 checks passed with checker SHA-256
 `30c4524d57f6723e39ba117097222f3ab8ef3e899a8a4af8b7e60c68337842bf`, built
 from tot commit `8cf0b8b` with a clean tree. Build that commit to reproduce
 the reference checker. To select an existing build explicitly, run
 `TOT=/absolute/path/to/tot.exe python3 test/check.py`.
 
-The 116 checks:
+The 123 checks:
 
 - All generic proofs check without a prelude or axioms.
+- Honest coefficient strategies: four abstract statements, computed linear
+  marginals and challenge-dependent children, acceptance at two and zero
+  rounds, and full finite acceptance counts. Four rejection controls cover
+  a missing target, a false claim, the wrong child value, and a wrong count.
 - Polynomial acceptance: six abstract statement checks, honest completeness
   with both obligations, and adaptive coefficient strategies. The examples
   also cover a degree-one natural-number strategy, all four bit challenge
@@ -405,7 +409,7 @@ The negative controls show that specific proof terms are rejected. They do
 not show that the false statements are unprovable.
 
 Run `python3 test/mutations.py` with the same `TOT` selection to rerun the
-suite and check 117 deliberate mutations in memory. All were caught.
+suite and check 124 deliberate mutations in memory. All were caught.
 Four mutations weaken conditional soundness or corrupt a continuation's claim
 or target. Generic proofs catch the budget theorem and both tree mutations;
 the abstract soundness check catches the scaled theorem weakening.
@@ -689,6 +693,46 @@ projection, honest completeness, and count-erasure statement mutations are
 caught by the abstract statement check. No root bound or unconditional
 soundness is claimed.
 
+## Honest coefficient strategies
+
+`src/HonestCoefficients.tot` constructs `scHonestCoefficientStrategy` from
+an individual-degree target certificate. Each node extracts coefficients
+from the certified honest marginal before the challenge selects the next
+restricted target. It uses the same explicit distribution and additive
+interchange laws as the marginal theorem. Marginal extraction, target
+restriction, and the strategy constructor are reducible. The concrete
+certificate, the goal function, the carrier operations, and the generated
+strategy must also be reducible for a closed count to compute. The
+reducible keyword changes no type and no proof obligation.
+
+`scWitnessRoundAccept` transfers a round check and continuation acceptance
+along pointwise marginal-evaluation equalities. It needs no equality between
+functions or function extensionality. `scHonestCoefficientCompleteness`
+uses this helper inductively and supplies the strategy's degree evidence.
+The polynomial acceptance relation accepts every challenge vector at the
+true initial Boolean sum. `scHonestCoefficientCount` then proves the
+exact accepted count `|F|^n`, including zero rounds, from finite enumeration.
+
+The natural-number example constructs a two-round strategy for `1 + 2*x`.
+Its first marginal evaluates to ten at two. The child selected by two
+returns five; the child selected by zero returns one. A constant bit target
+checks all four accepted vectors through the computed count, and zero
+rounds give count one. The bit operations are exclusive or and conjunction
+with proved laws, not a field instance. Exclusive or reads both arguments
+and makes the two-round sum low. The bit case rejects a projection of the
+addition. Four abstract statements and four rejection controls
+pin the interfaces and premises. Five mutations trivialize the public
+constructor and theorems or select the wrong restricted child. Four fail
+at generic proofs; the count-statement mutation fails at the abstract
+statement check. Removing the round helper causes an expected-type hole
+when its consumer constructs acceptance; its mutation pins that diagnostic.
+Two opacity mutations drop the reducible keyword from marginal extraction
+and target restriction. Both fail at the example check.
+
+This completes the honest coefficient-strategy constructor milestone.
+Multivariate coefficient tensors, field structure, a root bound, and
+unconditional soundness remain open.
+
 ## Next milestones
 
 1. Finite enumeration independence is proved. Predicate monotonicity,
@@ -703,9 +747,10 @@ soundness is claimed.
    restriction and supply polynomial witnesses for honest marginals and
    transcripts. Polynomial acceptance enforces degree evidence, and
    coefficient strategies supply it by construction with decidable acceptance
-   and exact count preservation. Add a multivariate coefficient representation
-   that constructs the target certificates, an honest coefficient-strategy
-   constructor, and field operations with explicit laws.
+   and exact count preservation. Honest coefficient strategies construct
+   the marginal coefficients, accept every challenge vector for the true sum,
+   and have exact count `|F|^n`. Add a multivariate coefficient representation
+   that constructs target certificates and field operations with explicit laws.
 3. Prove the univariate root bound and the agreement bound for distinct
    bounded-degree polynomials.
 4. Adaptive strategies, enforced round counts, decidable acceptance, and the
@@ -724,7 +769,8 @@ Sources: `src/Foundation.tot`, `src/Completeness.tot`, `src/Finite.tot`,
 `src/Arithmetic.tot`, `src/Recurrence.tot`, `src/Strategies.tot`,
 `src/AcceptanceCounting.tot`, `src/EnumerationIndependent.tot`,
 `src/RoundBounds.tot`, `src/ConditionalSoundness.tot`, `src/Polynomials.tot`,
-`src/PolynomialTargets.tot`, `src/PolynomialAcceptance.tot`.
+`src/PolynomialTargets.tot`, `src/PolynomialAcceptance.tot`,
+`src/HonestCoefficients.tot`.
 
 ## License
 

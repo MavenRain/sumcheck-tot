@@ -9,6 +9,148 @@ import check
 # Abstract-argument checks pin statements without generic consumers;
 # other weakened statements are rejected by downstream proofs.
 MUTATIONS = [
+    ("scHonestCoefficientStrategy-trivialized",
+     """reducible def rec scHonestCoefficientStrategy : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) ->
+    (n : Nat) -> (g : List F -> F) ->
+    ScPolynomialTarget F plus times d n g -> ScPolynomialStrategy F d n :=
+  fun F plus times distribute shuffle lo hi d n => match n as k return
+      (g : List F -> F) -> ScPolynomialTarget F plus times d k g ->
+      ScPolynomialStrategy F d k with
+  | zero => fun g target => scUnit
+  | succ k => fun g target => pair
+      (ScPolynomial F d) (F -> ScPolynomialStrategy F d k)
+      (scWitnessPolynomial F plus times d (scMarginal F plus lo hi k g)
+        (scPolynomialMarginal F plus times distribute shuffle lo hi d k g target))
+      (fun r => scHonestCoefficientStrategy F plus times distribute shuffle lo hi d k
+        (scRestrict F g r)
+        (scPolynomialTargetRestrict F plus times d k g target r))
+  end""",
+     """def scHonestCoefficientStrategy : ScUnit := scUnit""", 1),
+    ("scWitnessRoundAccept-trivialized", """def scWitnessRoundAccept : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> F) ->
+    (w : ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g)) ->
+    (r : F) -> (tail : ScTrace F) ->
+    scAccept F plus lo hi tail (scRestrict F g r)
+      (scMarginal F plus lo hi n g r) ->
+    scAccept F plus lo hi
+      (scStep F (scPolynomialEval F plus times d
+        (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w)) r tail)
+      g (scSum F plus lo hi (succ n) g) :=
+  fun F plus times lo hi d n g w => match w as witness return
+      (r : F) -> (tail : ScTrace F) ->
+      scAccept F plus lo hi tail (scRestrict F g r)
+        (scMarginal F plus lo hi n g r) ->
+      scAccept F plus lo hi
+        (scStep F (scPolynomialEval F plus times d
+          (scWitnessPolynomial F plus times d
+            (scMarginal F plus lo hi n g) witness)) r tail)
+        g (scSum F plus lo hi (succ n) g) with
+  | scPolynomialWitness p equal => fun r tail accepted => pair _ _
+      (scPolynomialCong2 F plus
+        (scPolynomialEval F plus times d p lo) (scMarginal F plus lo hi n g lo)
+        (scPolynomialEval F plus times d p hi) (scMarginal F plus lo hi n g hi)
+        (equal lo) (equal hi))
+      (scTransport F (scMarginal F plus lo hi n g r)
+        (scPolynomialEval F plus times d p r)
+        (scAccept F plus lo hi tail (scRestrict F g r))
+        (scEqSym F (scPolynomialEval F plus times d p r)
+          (scMarginal F plus lo hi n g r) (equal r)) accepted)
+  end""",
+     """def scWitnessRoundAccept : ScUnit := scUnit""", 1),
+    ("scHonestCoefficientCompleteness-trivialized",
+     """def rec scHonestCoefficientCompleteness : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) ->
+    (n : Nat) -> (g : List F -> F) ->
+    (target : ScPolynomialTarget F plus times d n g) ->
+    (v : ScVector F n) -> ScPolynomialStrategyAccept F plus times lo hi d n
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target) g
+      (scSum F plus lo hi n g) v :=
+  fun F plus times distribute shuffle lo hi d n => match n as k return
+      (g : List F -> F) ->
+      (target : ScPolynomialTarget F plus times d k g) ->
+      (v : ScVector F k) -> ScPolynomialStrategyAccept F plus times lo hi d k
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d k g target) g
+      (scSum F plus lo hi k g) v with
+  | zero => fun g target v => pair _ _ (refl F (g (nil F))) scUnit
+  | succ k => fun g target v => match v as w return
+      ScPolynomialStrategyAccept F plus times lo hi d (succ k)
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d (succ k) g
+        target) g
+      (scSum F plus lo hi (succ k) g) w with
+    | pair r rest => pair _ _
+        (scWitnessRoundAccept F plus times lo hi d k g
+          (scPolynomialMarginal F plus times distribute shuffle lo hi d k g target) r
+          (scRunStrategy F k (scPolynomialStrategyErase F plus times d k
+            (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d k
+              (scRestrict F g r) (scPolynomialTargetRestrict F plus times d k g target
+              r))) rest)
+          (scPolynomialAcceptAlgebraic F plus times lo hi d
+            (scRunStrategy F k (scPolynomialStrategyErase F plus times d k
+              (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d k
+                (scRestrict F g r) (scPolynomialTargetRestrict F plus times d k g target
+                r))) rest)
+            (scRestrict F g r) (scSum F plus lo hi k (scRestrict F g r))
+            (scHonestCoefficientCompleteness F plus times distribute shuffle lo hi d k
+              (scRestrict F g r)
+              (scPolynomialTargetRestrict F plus times d k g target r) rest)))
+        (scPolynomialStrategyDegree F plus times d (succ k)
+          (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d (succ k)
+            g target) (pair F (ScVector F k) r rest))
+    end
+  end""",
+     """def scHonestCoefficientCompleteness : ScUnit := scUnit""", 1),
+    ("scHonestCoefficientCount-trivialized",
+     """def scHonestCoefficientCount : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) ->
+    (n : Nat) -> (g : List F -> F) ->
+    (target : ScPolynomialTarget F plus times d n g) ->
+    Eq Nat (scPolynomialAcceptingCount F finite plus times lo hi d n
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target) g
+        (scSum F plus lo hi n g))
+      (scPow (scCardinality F finite) n) :=
+  fun F finite plus times distribute shuffle lo hi d n g target => scEqTrans Nat
+    (scPolynomialAcceptingCount F finite plus times lo hi d n
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target) g
+        (scSum F plus lo hi n g))
+    (scCardinality (ScVector F n) (scVectorFinite F finite n))
+    (scPow (scCardinality F finite) n)
+    (scCountSatisfied (ScVector F n)
+      (ScPolynomialStrategyAccept F plus times lo hi d n
+        (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target)
+          g (scSum F plus lo hi n g))
+      (scPolynomialStrategyAcceptDec F finite plus times lo hi d n
+        (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target)
+          g (scSum F plus lo hi n g))
+      (scHonestCoefficientCompleteness F plus times distribute shuffle lo hi d n g
+        target)
+      (scElements (ScVector F n) (scVectorFinite F finite n)))
+    (scVectorCardinality F finite n)""",
+     """def scHonestCoefficientCount : ScUnit := scUnit""", 1),
+    ("honest-coefficient-wrong-restriction",
+     """(fun r => scHonestCoefficientStrategy F plus times distribute shuffle lo hi d k
+        (scRestrict F g r)
+        (scPolynomialTargetRestrict F plus times d k g target r))""",
+     """(fun r => scHonestCoefficientStrategy F plus times distribute shuffle lo hi d k
+        (scRestrict F g lo)
+        (scPolynomialTargetRestrict F plus times d k g target lo))""", 1),
     ("scPolynomialAcceptAlgebraic-trivialized", """def scPolynomialAcceptAlgebraic : (0 F : Type 0) ->
     (plus : F -> F -> F) -> (times : F -> F -> F) ->
     (lo : F) -> (hi : F) -> (d : Nat) -> (trace : ScTrace F) ->
@@ -1823,6 +1965,10 @@ MUTATIONS = [
      "def scProductFinite :", 1),
     ("pair-decision-opaque", "reducible def scPairDecEq :",
      "def scPairDecEq :", 1),
+    ("polynomial-marginal-opaque", "reducible def scPolynomialMarginal :",
+     "def scPolynomialMarginal :", 1),
+    ("target-restrict-opaque", "reducible def scPolynomialTargetRestrict :",
+     "def scPolynomialTargetRestrict :", 1),
     ("pair-decision-ignores-first", "match decideA x y with",
      "match decideA x x with", 1),
     ("pair-decision-ignores-second", "match decideB u v with",
@@ -1859,6 +2005,9 @@ MUTATIONS = [
 
 # Removing a refutation function first fails when an existing proof applies it.
 MUTATION_DIAGNOSTICS = {
+    "scHonestCoefficientStrategy-trivialized": "not a function type: scunit",
+    "scWitnessRoundAccept-trivialized": "hole: no expected type at this position",
+    "scHonestCoefficientCompleteness-trivialized": "not a function type: scunit",
     "scPolynomialAcceptAlgebraic-trivialized": "not a function type: scunit",
     "scPolynomialStrategyDegree-trivialized": "not a function type: scunit",
     "scPolynomialStrategyAcceptDec-trivialized": "not a function type: scunit",

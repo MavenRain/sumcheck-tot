@@ -37,7 +37,7 @@ reducible def rec ScPolynomialTarget : (0 F : Type 0) ->
       ((r : F) -> ScPolynomialTarget F plus times d k (scRestrict F g r))
   end
 
-def scPolynomialTargetRestrict : (0 F : Type 0) ->
+reducible def scPolynomialTargetRestrict : (0 F : Type 0) ->
     (plus : F -> F -> F) -> (times : F -> F -> F) -> (d : Nat) -> (n : Nat) ->
     (g : List F -> F) -> ScPolynomialTarget F plus times d (succ n) g ->
     (r : F) -> ScPolynomialTarget F plus times d n (scRestrict F g r) :=
@@ -67,7 +67,7 @@ def rec scSumCong : (0 F : Type 0) -> (plus : F -> F -> F) ->
   end
 
 -- Summing the witnessed slices gives coefficients for the honest marginal.
-def scPolynomialMarginal : (0 F : Type 0) ->
+reducible def scPolynomialMarginal : (0 F : Type 0) ->
     (plus : F -> F -> F) -> (times : F -> F -> F) ->
     (distribute : (x : F) -> (a : F) -> (b : F) ->
       Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->

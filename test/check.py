@@ -15,7 +15,8 @@ BASE = "\n".join((ROOT / "src" / name).read_text() for name in
                   "CountingAlgebra.tot", "FiberCounting.tot", "Arithmetic.tot",
                   "Recurrence.tot", "Strategies.tot", "AcceptanceCounting.tot",
                   "EnumerationIndependent.tot", "RoundBounds.tot", "ConditionalSoundness.tot",
-                  "Polynomials.tot", "PolynomialTargets.tot", "PolynomialAcceptance.tot"))
+                  "Polynomials.tot", "PolynomialTargets.tot", "PolynomialAcceptance.tot",
+                  "HonestCoefficients.tot"))
 EXAMPLE = """
 reducible def rec plusN : Nat -> Nat -> Nat := fun a b => match a with
 | zero => b | succ k => succ (plusN k b) end
@@ -1155,8 +1156,216 @@ def coeffLinearAccept : ScPolynomialStrategyAccept Nat scAdd scMul zero oneN
     coeffLinearDegree
 """
 
+HONEST_COEFFICIENT_STATEMENTS = """
+def scHonestCoefficientStrategyAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) ->
+    (n : Nat) -> (g : List F -> F) ->
+    ScPolynomialTarget F plus times d n g -> ScPolynomialStrategy F d n :=
+  scHonestCoefficientStrategy
+def scWitnessRoundAcceptAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (lo : F) -> (hi : F) -> (d : Nat) -> (n : Nat) ->
+    (g : List F -> F) ->
+    (w : ScPolynomialWitness F plus times d (scMarginal F plus lo hi n g)) ->
+    (r : F) -> (tail : ScTrace F) ->
+    scAccept F plus lo hi tail (scRestrict F g r)
+      (scMarginal F plus lo hi n g r) ->
+    scAccept F plus lo hi
+      (scStep F (scPolynomialEval F plus times d
+        (scWitnessPolynomial F plus times d (scMarginal F plus lo hi n g) w)) r tail)
+      g (scSum F plus lo hi (succ n) g) := scWitnessRoundAccept
+def scHonestCoefficientCompletenessAt : (0 F : Type 0) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) ->
+    (n : Nat) -> (g : List F -> F) ->
+    (target : ScPolynomialTarget F plus times d n g) ->
+    (v : ScVector F n) -> ScPolynomialStrategyAccept F plus times lo hi d n
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target) g
+      (scSum F plus lo hi n g) v := scHonestCoefficientCompleteness
+def scHonestCoefficientCountAt : (0 F : Type 0) -> (finite : ScFinite F) ->
+    (plus : F -> F -> F) -> (times : F -> F -> F) ->
+    (distribute : (x : F) -> (a : F) -> (b : F) ->
+      Eq F (times x (plus a b)) (plus (times x a) (times x b))) ->
+    (shuffle : (a : F) -> (b : F) -> (c : F) -> (e : F) ->
+      Eq F (plus (plus a b) (plus c e)) (plus (plus a c) (plus b e))) ->
+    (lo : F) -> (hi : F) -> (d : Nat) ->
+    (n : Nat) -> (g : List F -> F) ->
+    (target : ScPolynomialTarget F plus times d n g) ->
+    Eq Nat (scPolynomialAcceptingCount F finite plus times lo hi d n
+      (scHonestCoefficientStrategy F plus times distribute shuffle lo hi d n g target) g
+        (scSum F plus lo hi n g))
+      (scPow (scCardinality F finite) n) := scHonestCoefficientCount
+"""
+HONEST_COEFFICIENT_EXAMPLE = TARGET_EXAMPLE.replace(
+    "def linearTarget :", "reducible def linearTarget :"
+).replace("def rec constantTarget :", "reducible def rec constantTarget :") + """
+reducible def generatedLinear : ScPolynomialStrategy Nat oneN twoN :=
+  scHonestCoefficientStrategy Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN twoN linearGoal linearTarget
+def generatedLinearAccepted : ScPolynomialStrategyAccept Nat scAdd scMul
+    zero oneN oneN twoN generatedLinear linearGoal
+    (scSum Nat scAdd zero oneN twoN linearGoal) (scListVector Nat challengesN) :=
+  scHonestCoefficientCompleteness Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN twoN linearGoal linearTarget (scListVector Nat challengesN)
+def generatedFirstValue : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN
+      (scFirst (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN oneN)
+        generatedLinear) twoN) (scAdd (succ fourN) (succ fourN)) :=
+  refl Nat (scAdd (succ fourN) (succ fourN))
+def generatedChildValue : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN
+      (scFirst (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN zero)
+        ((scSecond (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN oneN)
+          generatedLinear) twoN)) oneN) (succ fourN) := refl Nat (succ fourN)
+def generatedOtherChild : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN
+      (scFirst (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN zero)
+        ((scSecond (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN oneN)
+          generatedLinear) zero)) oneN) oneN := refl Nat oneN
+def generatedZeroAccepted : ScPolynomialStrategyAccept Nat scAdd scMul
+    zero oneN oneN zero
+    (scHonestCoefficientStrategy Nat scAdd scMul targetDistribute targetShuffle
+      zero oneN oneN zero linearGoal scUnit) linearGoal (linearGoal (nil Nat)) scUnit :=
+  scHonestCoefficientCompleteness Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN zero linearGoal scUnit scUnit
+"""
+HONEST_COEFFICIENT_BITS = EXAMPLE + """
+reducible def honestBitPlus : ScBit -> ScBit -> ScBit := fun a b => match a with
+| scLow => b | scHigh => match b with | scLow => scHigh | scHigh => scLow end end
+reducible def honestBitTimes : ScBit -> ScBit -> ScBit := fun a b => match a with
+| scLow => scLow | scHigh => b end
+def honestBitDistribute : (x : ScBit) -> (a : ScBit) -> (b : ScBit) ->
+    Eq ScBit (honestBitTimes x (honestBitPlus a b))
+      (honestBitPlus (honestBitTimes x a) (honestBitTimes x b)) :=
+  fun x a b => match x as y return
+      Eq ScBit (honestBitTimes y (honestBitPlus a b))
+        (honestBitPlus (honestBitTimes y a) (honestBitTimes y b)) with
+  | scLow => refl ScBit scLow
+  | scHigh => refl ScBit (honestBitPlus a b)
+  end
+def honestBitShuffle : (a : ScBit) -> (b : ScBit) -> (c : ScBit) -> (e : ScBit) ->
+    Eq ScBit (honestBitPlus (honestBitPlus a b) (honestBitPlus c e))
+      (honestBitPlus (honestBitPlus a c) (honestBitPlus b e)) :=
+  fun a b c e => match a as w return
+      Eq ScBit (honestBitPlus (honestBitPlus w b) (honestBitPlus c e))
+        (honestBitPlus (honestBitPlus w c) (honestBitPlus b e)) with
+  | scLow => match b as x return
+      Eq ScBit (honestBitPlus (honestBitPlus scLow x) (honestBitPlus c e))
+        (honestBitPlus (honestBitPlus scLow c) (honestBitPlus x e)) with
+    | scLow => refl ScBit (honestBitPlus c e)
+    | scHigh => match c as y return
+        Eq ScBit (honestBitPlus (honestBitPlus scLow scHigh) (honestBitPlus y e))
+          (honestBitPlus (honestBitPlus scLow y) (honestBitPlus scHigh e)) with
+      | scLow => refl ScBit (honestBitPlus scHigh e)
+      | scHigh => refl ScBit (honestBitPlus scHigh (honestBitPlus scHigh e))
+      end
+    end
+  | scHigh => match b as x return
+      Eq ScBit (honestBitPlus (honestBitPlus scHigh x) (honestBitPlus c e))
+        (honestBitPlus (honestBitPlus scHigh c) (honestBitPlus x e)) with
+    | scLow => match c as y return
+        Eq ScBit (honestBitPlus (honestBitPlus scHigh scLow) (honestBitPlus y e))
+          (honestBitPlus (honestBitPlus scHigh y) (honestBitPlus scLow e)) with
+      | scLow => refl ScBit (honestBitPlus scHigh e)
+      | scHigh => match e as z return
+          Eq ScBit (honestBitPlus (honestBitPlus scHigh scLow)
+              (honestBitPlus scHigh z))
+            (honestBitPlus (honestBitPlus scHigh scHigh)
+              (honestBitPlus scLow z)) with
+        | scLow => refl ScBit scLow
+        | scHigh => refl ScBit scHigh
+        end
+      end
+    | scHigh => match c as y return
+        Eq ScBit (honestBitPlus (honestBitPlus scHigh scHigh) (honestBitPlus y e))
+          (honestBitPlus (honestBitPlus scHigh y) (honestBitPlus scHigh e)) with
+      | scLow => match e as z return
+          Eq ScBit (honestBitPlus (honestBitPlus scHigh scHigh)
+              (honestBitPlus scLow z))
+            (honestBitPlus (honestBitPlus scHigh scLow)
+              (honestBitPlus scHigh z)) with
+        | scLow => refl ScBit scLow
+        | scHigh => refl ScBit scHigh
+        end
+      | scHigh => refl ScBit (honestBitPlus scHigh e)
+      end
+    end
+  end
+reducible def honestBitGoal : List ScBit -> ScBit := fun xs => scHigh
+reducible def rec honestBitTarget : (n : Nat) ->
+    ScPolynomialTarget ScBit honestBitPlus honestBitTimes zero n honestBitGoal :=
+  fun n => match n as k return
+      ScPolynomialTarget ScBit honestBitPlus honestBitTimes zero k honestBitGoal with
+  | zero => scUnit
+  | succ k => pair
+      ((xs : List ScBit) -> ScPolynomialWitness ScBit honestBitPlus honestBitTimes
+        zero (fun x => scHigh))
+      ((r : ScBit) -> ScPolynomialTarget ScBit honestBitPlus honestBitTimes
+        zero k honestBitGoal)
+      (fun xs => scPolynomialWitness ScBit honestBitPlus honestBitTimes zero
+        (fun x => scHigh) (pair ScBit ScUnit scHigh scUnit)
+        (fun x => refl ScBit scHigh))
+      (fun r => honestBitTarget k)
+  end
+reducible def generatedBits : ScPolynomialStrategy ScBit zero twoN :=
+  scHonestCoefficientStrategy ScBit honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh zero twoN
+    honestBitGoal (honestBitTarget twoN)
+def generatedBitCount : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh zero twoN generatedBits honestBitGoal scLow) fourN :=
+  scHonestCoefficientCount ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh zero twoN
+    honestBitGoal (honestBitTarget twoN)
+def generatedBitCountValue : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh zero twoN generatedBits honestBitGoal scLow) fourN := refl Nat fourN
+def generatedBitZeroCount : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh zero zero scUnit honestBitGoal scHigh) oneN :=
+  scHonestCoefficientCount ScBit scBitFinite honestBitPlus honestBitTimes
+    honestBitDistribute honestBitShuffle scLow scHigh zero zero
+    honestBitGoal scUnit
+def honestBitTimesOther : Eq ScBit (honestBitTimes scLow scHigh) scLow := refl ScBit scLow
+"""
+
 CASES = [
     ("generic-proofs", "", None),
+    ("honest-coefficient-statements", HONEST_COEFFICIENT_STATEMENTS, None),
+    ("honest-coefficient-examples", HONEST_COEFFICIENT_EXAMPLE, None),
+    ("honest-coefficient-counts", HONEST_COEFFICIENT_BITS, None),
+    ("honest-coefficient-missing-target", TARGET_EXAMPLE + """
+def bad : ScPolynomialStrategy Nat oneN twoN :=
+  scHonestCoefficientStrategy Nat scAdd scMul targetDistribute targetShuffle
+    zero oneN oneN twoN linearGoal scUnit
+""", "mismatch"),
+    ("honest-coefficient-false-claim", HONEST_COEFFICIENT_EXAMPLE + """
+def bad : ScPolynomialStrategyAccept Nat scAdd scMul zero oneN oneN twoN
+    generatedLinear linearGoal zero (scListVector Nat challengesN) :=
+  generatedLinearAccepted
+""", "mismatch"),
+    ("honest-coefficient-wrong-child", HONEST_COEFFICIENT_EXAMPLE + """
+def bad : Eq Nat
+    (scPolynomialEval Nat scAdd scMul oneN
+      (scFirst (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN zero)
+        ((scSecond (ScPolynomial Nat oneN) (Nat -> ScPolynomialStrategy Nat oneN oneN)
+          generatedLinear) twoN)) oneN) oneN := refl Nat oneN
+""", "mismatch"),
+    ("honest-coefficient-wrong-count", HONEST_COEFFICIENT_BITS + """
+def bad : Eq Nat
+    (scPolynomialAcceptingCount ScBit scBitFinite honestBitPlus honestBitTimes
+      scLow scHigh zero twoN generatedBits honestBitGoal scLow) twoN := refl Nat twoN
+""", "mismatch"),
+
     ("polynomial-acceptance-statements", POLYNOMIAL_ACCEPTANCE_STATEMENTS, None),
     ("polynomial-acceptance-examples", POLYNOMIAL_ACCEPTANCE_EXAMPLE, None),
     ("acceptance-missing-degree", POLYNOMIAL_ACCEPTANCE_EXAMPLE + """
